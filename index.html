@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Poems of John Donne</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">The Poems of John Donne</h1>
+                <p class="subtitle">A Collection from Project Gutenberg</p>
+                <p class="description">
+                    John Donne (1572-1631) was an English poet, scholar, soldier and secretary. 
+                    He is considered the pre-eminent representative of the metaphysical poets.
+                </p>
+            </div>
+        </header>
+
+        <div class="search-section">
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="search-input" 
+                    placeholder="Search poems by title or content..."
+                    autocomplete="off"
+                >
+                <button id="clearSearch" class="clear-btn" style="display: none;">✕</button>
+            </div>
+            <div class="search-info">
+                <span id="resultCount" class="result-count"></span>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <div id="poemsList" class="poems-grid">
+                <!-- Poems will be loaded here -->
+            </div>
+        </main>
+
+        <div id="poemModal" class="modal">
+            <div class="modal-content">
+                <button class="modal-close" id="closeModal">&times;</button>
+                <div class="modal-body">
+                    <h2 id="modalTitle" class="modal-title"></h2>
+                    <div id="modalContent" class="modal-poem-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>
+                Source: <a href="https://www.gutenberg.org/files/48688/48688-h/48688-h.htm" target="_blank" rel="noopener">
+                    Project Gutenberg
+                </a>
+            </p>
+            <p class="footer-note">
+                The Poems of John Donne, Edited by Herbert J. C. Grierson (1912)
+            </p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
