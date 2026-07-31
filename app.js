@@ -74,30 +74,120 @@ function getPreview(content) {
 }
 
 // Clean poem content for display
-function cleanPoemContent(content) {
-    // Split by lines
-    let lines = content.split('\n');
-    
-    // Remove lines that look like editorial notes (contain manuscript references, edition numbers, etc.)
-    lines = lines.filter(line => {
+function cleanPoemContent(content, title = '') {
+    const lines = content.split('\n');
+    const cleanedLines = [];
+    const normalizedTitle = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    let hasContent = false;
+
+    for (const line of lines) {
         const trimmed = line.trim();
-        
-        // Skip lines that look like editorial notes
-        if (/^\d+/.test(trimmed) && /\d{4}/.test(trimmed)) return false;
-        if (/^[A-Z\d\s,]+\d{4}/.test(trimmed)) return false;
-        if (trimmed.match(/^\w+\.\s+\d{4}/)) return false;
-        if (trimmed.match(/^[A-Z][a-z]+\s+\d{4}/)) return false;
-        
-        return true;
+
+        // Printed page markers can occur in the middle of longer poems.
+        if (/^\[(?:pg|page)\s+\d+\]$/i.test(trimmed)) continue;
+
+        const normalizedLine = trimmed.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+        const repeatsTitle = (
+            normalizedTitle
+            && (
+                normalizedLine === normalizedTitle
+                || (normalizedTitle.length >= 8 && normalizedLine.startsWith(`${normalizedTitle} `))
+            )
+        );
+        const containsEditionYear = (
+            !/^\d{4}\s/.test(trimmed)
+            && /\b(?:15|16|17|18)\d{2}(?:-\d{2,4})?\b/.test(trimmed)
+        );
+        const containsManuscriptSiglum = /\b(?:A\d{2}|H\d{2}|L\d{2}|S96|RP\d+|TCC|TCD|O'F)\b/.test(trimmed);
+        const beginsEditorialApparatus = (
+            containsEditionYear
+            || /^##(?!#)\s/.test(trimmed)
+            || /^(?:footnote|probably by|query|stanza prefixed)\b/i.test(trimmed)
+            || /\bEd(?:itor)?[.:]/i.test(trimmed)
+            || /\b(?:MSS?|manuscript|no title|first printed|printed here|published here)\b\.?/i.test(trimmed)
+            || /punctuation (?:mainly )?(?:the )?editor/i.test(trimmed)
+            || containsManuscriptSiglum
+        );
+
+        // A few entries begin with a short editorial description followed by
+        // an attribution. Discard that preface and continue to the verse.
+        if (/^probably by\b/i.test(trimmed) && cleanedLines.filter(item => item.trim()).length <= 2) {
+            cleanedLines.length = 0;
+            hasContent = false;
+            continue;
+        }
+
+        if (!hasContent && beginsEditorialApparatus) continue;
+
+        // Once verse has begun, the first apparatus marker ends the poem. The
+        // remaining source lines are variant readings, not additional verse.
+        if (hasContent && (repeatsTitle || beginsEditorialApparatus)) break;
+
+        cleanedLines.push(line);
+        if (trimmed) hasContent = true;
+    }
+
+    return cleanedLines.join('\n').trim();
+}
+
+// Render source line numbers in a separate gutter so they do not run into the verse.
+function renderPoemContent(content, title) {
+    const fragment = document.createDocumentFragment();
+    const cleanedContent = cleanPoemContent(content, title);
+
+    // Gutenberg separates each printed verse with two newlines and stanzas with
+    // three. Remove the paragraph-export newline while retaining stanza space.
+    const normalizedContent = cleanedContent.replace(/\n{2,}/g, newlines => (
+        newlines.length === 2 ? '\n' : '\n\n'
+    ));
+    const lines = normalizedContent.split('\n');
+    let startsNewStanza = false;
+
+    lines.forEach(line => {
+        // Preserve stanza structure without rendering a full-height empty row.
+        if (!line.trim()) {
+            startsNewStanza = true;
+            return;
+        }
+
+        const lineElement = document.createElement('div');
+        lineElement.className = 'poem-line';
+        if (startsNewStanza) {
+            lineElement.classList.add('poem-line--stanza-start');
+            startsNewStanza = false;
+        }
+
+        const numberElement = document.createElement('span');
+        numberElement.className = 'poem-line-number';
+        numberElement.setAttribute('aria-hidden', 'true');
+
+        const textElement = document.createElement('span');
+        textElement.className = 'poem-line-text';
+
+        // Gutenberg attaches verse numbers directly to their text (for example,
+        // "5Take"). Only treat an unspaced numeric prefix as a line number.
+        const numberedLine = (
+            line.match(/^(\s*)(\d+)(?=[\p{L}'‘’“"(&])(.*)$/u)
+            || line.match(/^(\s*)(\d*[05])(?=\d+\s)(.*)$/)
+        );
+        if (numberedLine) {
+            numberElement.textContent = numberedLine[2];
+            textElement.textContent = numberedLine[1] + numberedLine[3];
+        } else {
+            textElement.textContent = line;
+        }
+
+        lineElement.append(numberElement, textElement);
+        fragment.appendChild(lineElement);
     });
-    
-    return lines.join('\n').trim();
+
+    modalContent.replaceChildren(fragment);
 }
 
 // Open poem modal
 function openPoemModal(poem) {
     modalTitle.textContent = poem.title;
-    modalContent.textContent = cleanPoemContent(poem.content);
+    renderPoemContent(poem.content, poem.title);
     poemModal.classList.add('show');
     document.body.style.overflow = 'hidden';
 }

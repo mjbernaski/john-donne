@@ -305,8 +305,33 @@ body {
     font-size: 1.15rem;
     line-height: 1.9;
     color: var(--text-color);
+}
+
+.poem-line {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    column-gap: 0.9rem;
+    align-items: baseline;
+}
+
+.poem-line--stanza-start {
+    margin-top: 0.55em;
+}
+
+.poem-line-number {
+    color: var(--text-light);
+    font-family: var(--font-sans);
+    font-size: 0.68em;
+    font-variant-numeric: tabular-nums;
+    line-height: inherit;
+    text-align: right;
+    user-select: none;
+}
+
+.poem-line-text {
+    min-width: 0;
     white-space: pre-wrap;
-    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Footer */
@@ -379,6 +404,11 @@ body {
 
     .modal-poem-content {
         font-size: 1.05rem;
+    }
+
+    .poem-line {
+        grid-template-columns: 1.75rem minmax(0, 1fr);
+        column-gap: 0.65rem;
     }
 }
 
