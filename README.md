@@ -8,6 +8,10 @@ A beautiful, modern website displaying the complete poems of John Donne, sourced
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
 - **Modal View**: Read full poems in a clean, focused modal interface
+- **Per-Poem AI Chat**: Discuss each poem in a dedicated conversation with a local vLLM model
+- **Persistent Conversations**: Keep each poem's discussion and context across page reloads
+- **Visual Companions**: Generate a length-scaled set of FLUX illustrations for each poem
+- **Gemini Narration**: Hear poems and model responses performed with distinct voices
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 
 ## Technology Stack
@@ -22,6 +26,7 @@ A beautiful, modern website displaying the complete poems of John Donne, sourced
 - `index.html` - Main website structure
 - `styles.css` - Complete styling and responsive design
 - `app.js` - JavaScript for interactivity, search, and modal functionality
+- `server.py` - Static development server and authenticated FLUX request proxy
 - `poems.json` - Parsed poem data (289 poems)
 - `parse_poems.py` - Python script to parse poems from Project Gutenberg source
 
@@ -32,11 +37,60 @@ A beautiful, modern website displaying the complete poems of John Donne, sourced
 Simply open `index.html` in a web browser, or use a local server:
 
 ```bash
-# Python 3
-python3 -m http.server 8000
+# Python 3 (serves the site and proxies authenticated image requests)
+python3 server.py
 
-# Then open http://localhost:8000
+# On this Mac: http://localhost:8000
+# Elsewhere on the LAN: http://mjblaptop.local:8000
 ```
+
+By default, the server binds to `0.0.0.0`, so it accepts connections on every
+network interface. On this machine it is installed as the macOS launch agent
+`com.johndonne.poetry-server`: it starts at login and is restarted by `launchd`
+if it exits. Its output is written to `server.log` and `server.error.log`.
+
+Useful service commands:
+
+```bash
+launchctl print gui/$(id -u)/com.johndonne.poetry-server
+launchctl kickstart -k gui/$(id -u)/com.johndonne.poetry-server
+```
+
+The poem chat connects directly from the browser to the OpenAI-compatible vLLM
+server at `http://192.168.5.46:8100`. The server must be reachable from the
+reader's device and allow cross-origin requests. Conversation history is kept
+separately for each poem and restored from browser storage after a reload.
+
+Image generation uses the FLUX server at `http://192.168.5.40:2222`. Enter its
+access key once in the Visual Companions panel; it is saved only in browser
+storage. Alternatively, provide the key to the local server process without
+exposing it to browser JavaScript:
+
+```bash
+FLUX_API_KEY=your-key python3 server.py
+```
+
+The server also reads `FLUX_API_KEY` and `GEMINI_API_KEY` from a local `.env`
+file. That file is ignored by Git.
+
+Short poems receive one image, with progressively longer poems receiving up to
+five distinct visual interpretations. Conversation history and generated-image
+records are stored separately for each poem in browser storage.
+
+Poem narration uses `gemini-3.1-flash-tts-preview`. Set the Gemini key on the
+local server (recommended), or enter it once in the narration panel:
+
+```bash
+GEMINI_API_KEY=gemini-key FLUX_API_KEY=flux-key python3 server.py
+```
+
+The narration proxy breaks long poems at stanza boundaries, synthesizes each
+section with consistent performance direction, and joins the PCM output into a
+single WAV player. The feminine option uses the mature Gacrux voice; the
+masculine option uses the smooth Algieba voice. Each completed model response
+also has its own listen control using the distinct, clear Iapetus voice. The
+WAV performances are stored in IndexedDB and automatically reused for the same
+poem, selected voice, or saved model response on later visits.
 
 ### Parsing Poems
 

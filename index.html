@@ -36,6 +36,13 @@
             <div class="search-info">
                 <span id="resultCount" class="result-count"></span>
             </div>
+            <div class="poem-discovery">
+                <button id="randomPoem" class="random-poem" type="button">Take me to a random poem</button>
+                <section id="recentPoemsSection" class="recent-poems" aria-labelledby="recentPoemsTitle" hidden>
+                    <h2 id="recentPoemsTitle" class="recent-poems-title">Recently visited</h2>
+                    <div id="recentPoemsList" class="recent-poems-list"></div>
+                </section>
+            </div>
         </div>
 
         <main class="main-content">
@@ -46,10 +53,87 @@
 
         <div id="poemModal" class="modal">
             <div class="modal-content">
-                <button class="modal-close" id="closeModal">&times;</button>
-                <div class="modal-body">
-                    <h2 id="modalTitle" class="modal-title"></h2>
-                    <div id="modalContent" class="modal-poem-content"></div>
+                <button class="modal-close" id="closeModal" aria-label="Close poem and chat">&times;</button>
+                <div class="modal-layout">
+                    <section class="poem-panel" aria-labelledby="modalTitle">
+                        <div class="modal-body">
+                            <h2 id="modalTitle" class="modal-title"></h2>
+                            <section class="poem-images" aria-labelledby="poemImagesTitle">
+                                <div class="poem-images-header">
+                                    <div>
+                                        <p class="poem-images-eyebrow">Visual companions</p>
+                                        <h3 id="poemImagesTitle" class="poem-images-title">Images inspired by the poem</h3>
+                                    </div>
+                                    <button id="generateImages" class="poem-images-generate" type="button">Generate images</button>
+                                </div>
+                                <div id="imageKeySetup" class="image-key-setup" hidden>
+                                    <label for="imageApiKey">FLUX server access key</label>
+                                    <div class="image-key-row">
+                                        <input id="imageApiKey" type="password" autocomplete="off" placeholder="Required by 192.168.5.40:2222">
+                                        <button id="saveImageApiKey" type="button">Save key</button>
+                                    </div>
+                                    <p>The key stays in this browser and is sent only through the local poetry server.</p>
+                                </div>
+                                <p id="poemImagesStatus" class="poem-images-status"></p>
+                                <div id="poemImagesGrid" class="poem-images-grid"></div>
+                            </section>
+                            <section class="poem-audio" aria-labelledby="poemAudioTitle">
+                                <div class="poem-audio-heading">
+                                    <div>
+                                        <p class="poem-audio-eyebrow">Gemini narration</p>
+                                        <h3 id="poemAudioTitle" class="poem-audio-title">Hear the poem aloud</h3>
+                                    </div>
+                                    <div class="poem-audio-actions">
+                                        <label for="poemVoice">Voice</label>
+                                        <select id="poemVoice">
+                                            <option value="feminine">Feminine · mature</option>
+                                            <option value="masculine">Masculine · smooth</option>
+                                        </select>
+                                        <button id="generateAudio" type="button">Read poem</button>
+                                    </div>
+                                </div>
+                                <div id="geminiKeySetup" class="image-key-setup" hidden>
+                                    <label for="geminiApiKey">Gemini API key</label>
+                                    <div class="image-key-row">
+                                        <input id="geminiApiKey" type="password" autocomplete="off" placeholder="Required for Gemini TTS">
+                                        <button id="saveGeminiApiKey" type="button">Save key</button>
+                                    </div>
+                                    <p>The key stays in this browser and is sent only through the local poetry server.</p>
+                                </div>
+                                <p id="poemAudioStatus" class="poem-audio-status">Choose a voice, then generate a reading.</p>
+                                <audio id="poemAudioPlayer" controls preload="none" hidden></audio>
+                            </section>
+                            <div id="modalContent" class="modal-poem-content"></div>
+                        </div>
+                    </section>
+
+                    <aside class="chat-panel" aria-labelledby="chatTitle">
+                        <header class="chat-header">
+                            <p class="chat-eyebrow">Dedicated poem session</p>
+                            <h3 id="chatTitle" class="chat-title">Discuss this poem</h3>
+                            <p class="chat-context">John Donne · Grierson edition · Project Gutenberg</p>
+                            <div class="chat-status-row">
+                                <span id="chatStatus" class="chat-status" data-state="connecting">Connecting to model…</span>
+                                <button id="clearChat" class="chat-clear" type="button">New conversation</button>
+                            </div>
+                        </header>
+
+                        <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+
+                        <form id="chatForm" class="chat-form">
+                            <label class="visually-hidden" for="chatInput">Ask about this poem</label>
+                            <textarea
+                                id="chatInput"
+                                class="chat-input"
+                                rows="2"
+                                placeholder="Ask about an image, line, theme, or historical context…"
+                            ></textarea>
+                            <div class="chat-form-footer">
+                                <span class="chat-hint">Enter to send · Shift+Enter for a new line</span>
+                                <button id="chatSend" class="chat-send" type="submit">Send</button>
+                            </div>
+                        </form>
+                    </aside>
                 </div>
             </div>
         </div>
@@ -66,6 +150,11 @@
         </footer>
     </div>
 
-    <script src="app.js"></script>
+    <div id="audioTimeRemaining" class="audio-time-remaining" hidden>
+        <span class="audio-time-remaining-label">Time remaining</span>
+        <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
+    </div>
+
+    <script src="app.js?v=20260801-7"></script>
 </body>
 </html>

@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""Serve the poetry site and proxy its authenticated FLUX image requests."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import io
+import json
+import os
+import time
+import wave
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+
+def load_local_environment(path: Path) -> None:
+    """Load simple KEY=VALUE entries without adding a dotenv dependency."""
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+load_local_environment(Path(__file__).resolve().with_name(".env"))
+FLUX_BASE_URL = os.environ.get("FLUX_BASE_URL", "http://192.168.5.40:2222").rstrip("/")
+FLUX_API_KEY = os.environ.get("FLUX_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
+GEMINI_TTS_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{GEMINI_TTS_MODEL}:generateContent"
+)
+TTS_VOICES = {"feminine": "Gacrux", "masculine": "Algieba", "companion": "Iapetus"}
+ALLOWED_GET_PATHS = {"/status"}
+ALLOWED_POST_PATHS = {"/generate"}
+
+
+class PoetryRequestHandler(SimpleHTTPRequestHandler):
+    """Static-file handler with a small, allow-listed FLUX reverse proxy."""
+
+    def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path.startswith("/api/flux/"):
+            upstream_path = self.path.removeprefix("/api/flux")
+            if upstream_path in ALLOWED_GET_PATHS or upstream_path.startswith("/images/"):
+                self._proxy_flux("GET", upstream_path)
+            else:
+                self.send_error(404, "Unknown FLUX endpoint")
+            return
+        super().do_GET()
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path == "/api/tts":
+            self._generate_tts()
+            return
+        if self.path.startswith("/api/flux/"):
+            upstream_path = self.path.removeprefix("/api/flux")
+            if upstream_path in ALLOWED_POST_PATHS:
+                self._proxy_flux("POST", upstream_path)
+            else:
+                self.send_error(404, "Unknown FLUX endpoint")
+            return
+        self.send_error(405, "POST is only supported for the FLUX proxy and Gemini TTS")
+
+    def _generate_tts(self) -> None:
+        api_key = GEMINI_API_KEY or self.headers.get("X-Gemini-API-Key", "")
+        if not api_key:
+            self._send_json(401, {"error": "A Gemini API key is required."})
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            title = str(payload.get("title", "")).strip()
+            text = str(payload.get("text", "")).strip()
+            voice = TTS_VOICES.get(str(payload.get("voice", "")))
+            kind = str(payload.get("kind", "poem"))
+            if not title or not text or not voice or kind not in {"poem", "response"}:
+                self._send_json(400, {"error": "title, text, kind, and a supported voice are required."})
+                return
+
+            pcm_chunks = []
+            chunks = self._split_tts_text(text)
+            for index, chunk in enumerate(chunks):
+                transcript = f"{title}.\n\n{chunk}" if kind == "poem" and index == 0 else chunk
+                prompt = self._build_tts_prompt(transcript, index, len(chunks), kind)
+                pcm_chunks.append(self._request_gemini_audio(api_key, voice, prompt))
+
+            audio_buffer = io.BytesIO()
+            with wave.open(audio_buffer, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(24000)
+                wav_file.writeframes(b"".join(pcm_chunks))
+            audio = audio_buffer.getvalue()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(audio)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(audio)
+        except (ValueError, json.JSONDecodeError) as error:
+            self._send_json(400, {"error": str(error)})
+        except HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            self._send_json(error.code, {"error": f"Gemini TTS request failed: {detail}"})
+        except (URLError, TimeoutError) as error:
+            reason = getattr(error, "reason", str(error))
+            self._send_json(502, {"error": f"Gemini TTS unavailable: {reason}"})
+        except Exception as error:  # Keep proxy failures legible to the browser.
+            self.log_error("Gemini TTS failure: %s", error)
+            self._send_json(502, {"error": f"Could not generate narration: {error}"})
+
+    @staticmethod
+    def _split_tts_text(text: str, limit: int = 1800) -> list[str]:
+        """Split on stanzas, then lines, to keep each performance under a few minutes."""
+        chunks = []
+        current = ""
+        for stanza in text.split("\n\n"):
+            sections = [stanza]
+            if len(stanza) > limit:
+                sections = []
+                section = ""
+                for line in stanza.splitlines():
+                    candidate = f"{section}\n{line}".strip()
+                    if section and len(candidate) > limit:
+                        sections.append(section)
+                        section = line
+                    else:
+                        section = candidate
+                if section:
+                    sections.append(section)
+
+            for section in sections:
+                candidate = f"{current}\n\n{section}".strip()
+                if current and len(candidate) > limit:
+                    chunks.append(current)
+                    current = section
+                else:
+                    current = candidate
+        if current:
+            chunks.append(current)
+        return chunks
+
+    @staticmethod
+    def _build_tts_prompt(transcript: str, index: int, total: int, kind: str) -> str:
+        continuation = "This is a continuation; preserve the established voice and cadence." if index else ""
+        if kind == "response":
+            return f"""Synthesize speech for an exact reading of literary commentary. Do not speak these directions.
+
+AUDIO PROFILE: A clear, warm literary companion explaining John Donne to an attentive reader.
+DIRECTOR'S NOTES: Natural and conversational, with intelligent emphasis and an unhurried explanatory cadence. Make quotations distinct without theatrical exaggeration. Do not add, omit, summarize, explain, or repeat any words. {continuation}
+PART: {index + 1} of {total}
+
+TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
+{transcript}"""
+        return f"""Synthesize speech for an exact literary reading. Do not speak these directions.
+
+AUDIO PROFILE: A seasoned reader of English metaphysical poetry performing John Donne for an attentive, intimate audience.
+SCENE: A quiet wood-paneled reading room with close, warm acoustics.
+DIRECTOR'S NOTES: Measured and contemplative, but never flat. Use intelligent rhetorical emphasis, subtle emotional warmth, natural breath at line endings, and slightly longer pauses between stanzas. Preserve Donne's wit, argument, tension, and sensual or devotional energy as the text requires. Use clear modern English pronunciation while respecting archaic words. Do not add, omit, explain, modernize, or repeat any words. {continuation}
+PART: {index + 1} of {total}
+
+TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
+{transcript}"""
+
+    def _request_gemini_audio(self, api_key: str, voice: str, prompt: str) -> bytes:
+        body = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": voice}
+                    }
+                },
+            },
+        }).encode()
+        request = Request(
+            GEMINI_TTS_URL,
+            data=body,
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+
+        last_error = None
+        for attempt in range(3):
+            try:
+                with urlopen(request, timeout=180) as response:
+                    payload = json.loads(response.read())
+                parts = payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                audio_part = next((part.get("inlineData") for part in parts if part.get("inlineData")), None)
+                if audio_part and audio_part.get("data"):
+                    audio = base64.b64decode(audio_part["data"])
+                    if audio.startswith(b"RIFF"):
+                        with wave.open(io.BytesIO(audio), "rb") as wav_file:
+                            return wav_file.readframes(wav_file.getnframes())
+                    return audio
+                last_error = ValueError("Gemini returned no audio payload.")
+            except HTTPError as error:
+                last_error = error
+                if error.code < 500:
+                    raise
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+        raise last_error or ValueError("Gemini returned no audio payload.")
+
+    def _send_json(self, status: int, payload: dict) -> None:
+        body = json.dumps(payload).encode()
+        self._send_proxy_response(status, {"Content-Type": "application/json"}, body)
+
+    def _proxy_flux(self, method: str, upstream_path: str) -> None:
+        api_key = FLUX_API_KEY or self.headers.get("X-API-Key", "")
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length) if length else None
+        headers = {"Accept": self.headers.get("Accept", "application/json")}
+        if api_key:
+            headers["X-API-Key"] = api_key
+        if body is not None:
+            headers["Content-Type"] = self.headers.get("Content-Type", "application/json")
+
+        request = Request(
+            f"{FLUX_BASE_URL}{upstream_path}",
+            data=body,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with urlopen(request, timeout=45) as response:
+                self._send_proxy_response(response.status, response.headers, response.read())
+        except HTTPError as error:
+            self._send_proxy_response(error.code, error.headers, error.read())
+        except (URLError, TimeoutError) as error:
+            reason = getattr(error, "reason", str(error))
+            message = json.dumps({"success": False, "error": f"FLUX server unavailable: {reason}"})
+            self._send_proxy_response(502, {"Content-Type": "application/json"}, message.encode())
+
+    def _send_proxy_response(self, status: int, headers, body: bytes) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", headers.get("Content-Type", "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", headers.get("Cache-Control", "no-store"))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="0.0.0.0", help="bind address (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8000, help="port (default: 8000)")
+    args = parser.parse_args()
+
+    os.chdir(Path(__file__).resolve().parent)
+    server = ThreadingHTTPServer((args.host, args.port), PoetryRequestHandler)
+    print(f"Serving John Donne poems at http://{args.host}:{args.port}")
+    print(f"Proxying image requests to {FLUX_BASE_URL}")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

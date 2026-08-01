@@ -2,8 +2,10 @@
 """
 Parse John Donne poems from Project Gutenberg HTML file
 """
+import argparse
 import json
 import re
+from pathlib import Path
 
 def parse_poems(input_file):
     """Parse poems from the fetched Gutenberg HTML file"""
@@ -127,9 +129,18 @@ def clean_poems(poems):
     return cleaned
 
 if __name__ == '__main__':
-    input_file = '/home/ubuntu/.cursor/projects/workspace/agent-tools/f969c3cd-f7cd-4da1-bf7c-c2c98271ff93.txt'
-    output_file = '/workspace/poetry-website/poems.json'
-    
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('input_file', help='Gutenberg text file to parse')
+    parser.add_argument('-o', '--output',
+                        default=str(Path(__file__).parent / 'poems.json'),
+                        help='where to write the JSON (default: poems.json next to this script)')
+    args = parser.parse_args()
+    input_file = args.input_file
+    output_file = args.output
+
+    if not Path(input_file).is_file():
+        parser.error(f'input file not found: {input_file}')
+
     print("Parsing poems from Project Gutenberg...")
     poems = parse_poems(input_file)
     print(f"Found {len(poems)} poems")
