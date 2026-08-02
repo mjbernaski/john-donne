@@ -500,15 +500,17 @@ function displayPoems(poems) {
         const preview = getPreview(poem.content);
         return `
             <div class="poem-card" data-index="${index}">
-                ${removable ? `
-                    <div class="poem-card-tools">
-                        <button class="poem-edit" type="button" aria-label="Edit this poem">Edit</button>
-                        <button class="poem-remove" type="button" aria-label="Remove this poem">&times;</button>
-                    </div>` : ''}
                 <h3 class="poem-title">${escapeHtml(poem.title)}</h3>
                 ${poem.author ? `<p class="poem-byline">${escapeHtml(poem.author)}</p>` : ''}
                 <p class="poem-preview">${escapeHtml(preview)}</p>
-                <span class="read-more">Read Full Poem →</span>
+                <div class="poem-card-footer">
+                    <span class="read-more">Read Full Poem →</span>
+                    ${removable ? `
+                        <span class="poem-card-tools">
+                            <button class="poem-tool" type="button" aria-label="Edit ${escapeHtml(poem.title)}">Edit</button>
+                            <button class="poem-tool poem-tool--remove" type="button" aria-label="Remove ${escapeHtml(poem.title)}">Remove</button>
+                        </span>` : ''}
+                </div>
             </div>
         `;
     }).join('');
@@ -519,14 +521,14 @@ function displayPoems(poems) {
             const index = parseInt(card.dataset.index);
             openPoemModal(filteredPoems[index]);
         });
-        const remove = card.querySelector('.poem-remove');
+        const remove = card.querySelector('.poem-tool--remove');
         if (remove) {
             remove.addEventListener('click', event => {
                 event.stopPropagation();   // the card itself opens the poem
                 removeUserPoem(filteredPoems[parseInt(card.dataset.index)]);
             });
         }
-        const edit = card.querySelector('.poem-edit');
+        const edit = card.querySelector('.poem-tool:not(.poem-tool--remove)');
         if (edit) {
             edit.addEventListener('click', event => {
                 event.stopPropagation();
