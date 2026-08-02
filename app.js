@@ -1575,21 +1575,26 @@ function setPoemAudioStatus(message, state = '') {
     poemAudioStatus.dataset.state = state;
 }
 
-async function requestGeminiTts(title, text, voice, kind = 'poem') {
+async function requestGeminiTts(title, text, voice, kind = 'poem', filename = '') {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     const apiKey = getGeminiApiKey();
     if (apiKey) headers.set('X-Gemini-API-Key', apiKey);
     const response = await fetch('/api/tts', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ title, text, voice, kind, book: currentBook.id })
+        body: JSON.stringify({ title, text, voice, kind, book: currentBook.id, filename })
     });
     if (response.status === 401) {
         geminiKeySetup.hidden = false;
         throw new Error('A Gemini API key is required or was rejected.');
     }
     if (!response.ok) throw new Error(await getApiError(response));
-    return response.blob();
+    // The server also parks the reading at a named path, so the browser's own
+    // player menu downloads it as a title rather than as "download.wav".
+    return {
+        blob: await response.blob(),
+        namedPath: response.headers.get('X-Audio-Path') || ''
+    };
 }
 
 function getReadableResponseText(content) {
@@ -1609,18 +1614,19 @@ async function getOrCreateResponseAudio(poem, content, onGenerate) {
             if (storedBlob) return { blob: storedBlob, saved: true, reused: true };
 
             if (onGenerate) onGenerate();
-            const blob = await requestGeminiTts(
+            const { blob, namedPath } = await requestGeminiTts(
                 `Discussion of ${poem.title}`,
                 getReadableResponseText(content),
                 'companion',
-                'response'
+                'response',
+                buildDownloadName(poem, ['commentary', VOICE_NAMES.companion], 'wav')
             );
             const saved = await storeAudio(audioKey, blob, {
                 kind: 'response',
                 poemTitle: poem.title,
                 voice: 'Iapetus'
             });
-            return { blob, saved, reused: false };
+            return { blob, namedPath, saved, reused: false };
         })();
         responseAudioRequests.set(audioKey, request);
         request.catch(() => responseAudioRequests.delete(audioKey));
@@ -1670,11 +1676,11 @@ function addChatListenControl(messageElement, content, session, autoPlay = false
             const audio = await getOrCreateResponseAudio(poem, content, () => {
                 listenButton.textContent = 'Preparing Iapetus…';
             });
-            const objectUrl = URL.createObjectURL(audio.blob);
-            session.responseAudioByText.set(content, objectUrl);
-            player.src = objectUrl;
+            const playbackUrl = audio.namedPath || URL.createObjectURL(audio.blob);
+            session.responseAudioByText.set(content, playbackUrl);
+            player.src = playbackUrl;
             player.hidden = false;
-            setDownloadLink(download, objectUrl, downloadName);
+            setDownloadLink(download, playbackUrl, downloadName);
             listenButton.textContent = 'Play again · Iapetus';
             pendingGeminiRetry = null;
             player.play().catch(() => {});
@@ -1772,21 +1778,22 @@ async function generatePoemReading() {
     setPoemAudioStatus('Gemini is preparing the performance. Long poems are read in joined sections…', 'working');
 
     try {
-        const audioBlob = await requestGeminiTts(poem.title, getReadablePoemText(poem), voice);
+        const downloadName = buildDownloadName(poem, [VOICE_NAMES[voice] || voice], 'wav');
+        const { blob: audioBlob, namedPath } = await requestGeminiTts(
+            poem.title, getReadablePoemText(poem), voice, 'poem', downloadName
+        );
         const saved = await storeAudio(getPoemAudioKey(poem, voice), audioBlob, {
             kind: 'poem',
             poemTitle: poem.title,
             voice
         });
-        const objectUrl = URL.createObjectURL(audioBlob);
-        session.audioByVoice.set(voice, objectUrl);
-        poemAudioPlayer.src = objectUrl;
+        // Prefer the server's named path so the player's own download menu
+        // sees a filename; a blob URL always saves as "download.wav".
+        const playbackUrl = namedPath || URL.createObjectURL(audioBlob);
+        session.audioByVoice.set(voice, playbackUrl);
+        poemAudioPlayer.src = playbackUrl;
         poemAudioPlayer.hidden = false;
-        setDownloadLink(
-            downloadAudio,
-            objectUrl,
-            buildDownloadName(poem, [VOICE_NAMES[voice] || voice], 'wav')
-        );
+        setDownloadLink(downloadAudio, playbackUrl, downloadName);
         setPoemAudioStatus(
             saved
                 ? 'Reading ready and saved for future visits. Use the player to pause, seek, or replay.'

@@ -8,11 +8,15 @@ import base64
 import io
 import json
 import os
+import re
+import secrets
 import time
 import wave
+from collections import OrderedDict
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote, unquote
 from urllib.request import Request, urlopen
 
 
@@ -69,6 +73,25 @@ ALLOWED_POST_PATHS = {"/generate"}
 ALLOWED_CHAT_GET_PATHS = {"/v1/models"}
 ALLOWED_CHAT_POST_PATHS = {"/v1/chat/completions"}
 CHAT_TIMEOUT = 300
+# Recent readings are kept so the player can load them from a URL ending in a
+# real filename; a blob URL downloads as "download.wav" whatever the page says.
+AUDIO_CACHE: "OrderedDict[str, tuple[str, bytes]]" = OrderedDict()
+AUDIO_CACHE_LIMIT = 8
+SAFE_FILENAME = re.compile(r"[^A-Za-z0-9 ,._'()\[\]-]+")
+
+
+def cache_audio(filename: str, audio: bytes) -> str:
+    """Store one reading under a token and return the path that serves it."""
+    name = SAFE_FILENAME.sub(" ", filename).strip().strip(".")
+    name = re.sub(r"\s+", " ", name)[:120] or "reading"
+    if not name.lower().endswith(".wav"):
+        name += ".wav"
+
+    token = secrets.token_urlsafe(9)
+    AUDIO_CACHE[token] = (name, audio)
+    while len(AUDIO_CACHE) > AUDIO_CACHE_LIMIT:
+        AUDIO_CACHE.popitem(last=False)
+    return f"/api/tts/audio/{token}/{quote(name)}"
 
 
 class PoetryRequestHandler(SimpleHTTPRequestHandler):
@@ -89,7 +112,45 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             else:
                 self.send_error(404, "Unknown model endpoint")
             return
+        if self.path.startswith("/api/tts/audio/"):
+            self._serve_cached_audio()
+            return
         super().do_GET()
+
+    def _serve_cached_audio(self) -> None:
+        parts = unquote(self.path.split("?", 1)[0]).split("/")
+        token = parts[4] if len(parts) > 4 else ""
+        entry = AUDIO_CACHE.get(token)
+        if not entry:
+            self.send_error(404, "That reading is no longer cached")
+            return
+
+        name, audio = entry
+        start, end = 0, len(audio) - 1
+        # Safari will not play media that cannot answer a range request.
+        requested = self.headers.get("Range", "")
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", requested.strip()) if requested else None
+        if match:
+            first, last = match.group(1), match.group(2)
+            if first:
+                start = min(int(first), len(audio))
+                if last:
+                    end = min(int(last), len(audio) - 1)
+            elif last:  # a suffix range asks for the final N bytes
+                start = max(len(audio) - int(last), 0)
+
+        body = audio[start:end + 1]
+        self.send_response(206 if match else 200)
+        self.send_header("Content-Type", "audio/wav")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Disposition", f'inline; filename="{name}"')
+        self.send_header("Cache-Control", "no-store")
+        if match:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(audio)}")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/api/tts":
@@ -143,10 +204,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 wav_file.setframerate(24000)
                 wav_file.writeframes(b"".join(pcm_chunks))
             audio = audio_buffer.getvalue()
+            audio_path = cache_audio(str(payload.get("filename", "")) or title, audio)
             self.send_response(200)
             self.send_header("Content-Type", "audio/wav")
             self.send_header("Content-Length", str(len(audio)))
             self.send_header("Cache-Control", "no-store")
+            # The player loads this path so its own download menu sees a filename.
+            self.send_header("X-Audio-Path", audio_path)
             self.end_headers()
             self.wfile.write(audio)
         except (ValueError, json.JSONDecodeError) as error:
