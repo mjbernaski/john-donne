@@ -1,0 +1,22 @@
+[Unit]
+# systemd equivalent of launchd/com.johndonne.poetry-server.plist, for a Linux host.
+# Install: sudo cp deploy/poetry-server.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now poetry-server
+# Edit User, WorkingDirectory, and the server.py path below to match the host.
+Description=John Donne poetry site and upstream proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=CHANGEME
+WorkingDirectory=/srv/john-donne
+ExecStart=/usr/bin/python3 -u /srv/john-donne/server.py
+Restart=always
+RestartSec=5
+# server.py reads .env from its own directory; keys need not be set here.
+StandardOutput=append:/srv/john-donne/server.log
+StandardError=append:/srv/john-donne/server.error.log
+
+[Install]
+WantedBy=multi-user.target

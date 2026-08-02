@@ -91,8 +91,8 @@ Simply open `index.html` in a web browser, or use a local server:
 # Python 3 (serves the site and proxies authenticated image requests)
 python3 server.py
 
-# On this Mac: http://localhost:8000
-# Elsewhere on the LAN: http://mjblaptop.local:8000
+# On the host itself:   http://localhost:8000
+# Elsewhere on the LAN:  http://<host>.local:8000
 ```
 
 By default, the server binds to `0.0.0.0`, so it accepts connections on every
@@ -106,6 +106,24 @@ Useful service commands:
 launchctl print gui/$(id -u)/com.johndonne.poetry-server
 launchctl kickstart -k gui/$(id -u)/com.johndonne.poetry-server
 ```
+
+### Moving the site to another host
+
+Almost nothing in the application is tied to a machine. The bind address, port,
+and both upstream servers live in `config.json`, and the browser only ever talks
+to this server's own origin, so readers need no knowledge of where it runs.
+
+Four things are host-specific and need attention on a move:
+
+| Item | What to do |
+| --- | --- |
+| Service definition | `launchd/com.johndonne.poetry-server.plist` is macOS-only. On a Linux host use `deploy/poetry-server.service` instead, editing `User`, `WorkingDirectory`, and the `server.py` path. |
+| Python interpreter | The plist hardcodes the Homebrew path. The systemd unit assumes `/usr/bin/python3`. Only the standard library is used, so any Python 3.9+ works. |
+| `.env` | Holds `FLUX_API_KEY` and optionally `GEMINI_API_KEY`. It is gitignored, so copy it across by hand — cloning the repo will not bring it. |
+| Reachability | The new host must be able to reach the FLUX and vLLM machines in `config.json`. Confirm with `curl` from the host before starting the service. |
+
+`config.json` itself usually needs no change, since the upstreams are addressed
+by IP rather than relative to the server.
 
 ## Service addresses
 
