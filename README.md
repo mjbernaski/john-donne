@@ -10,6 +10,7 @@ collections from the same interface.
 - **289 Donne Poems**: Complete collection of John Donne's poetry from the 1912 edition edited by Herbert J. C. Grierson
 - **376 Whitman Poems**: The complete 1891-92 arrangement of *Leaves of Grass*
 - **Baudelaire in Two Translations**: 68 pieces from the Huneker edition and 54 from Cyril Scott's verse rendering, kept apart so the same poem can be read in both hands
+- **A Shelf of Your Own**: Paste any poem into the Miscellaneous collection and it gains the same companion, images, and narration as the rest
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
 - **Modal View**: Read full poems in a clean, focused modal interface
@@ -17,7 +18,9 @@ collections from the same interface.
 - **Persistent Conversations**: Keep each poem's discussion and context across page reloads
 - **Visual Companions**: Generate a length-scaled set of FLUX illustrations for each poem
 - **Chosen Visual Styles**: Pick which of the 24 image styles the illustrations may use, or leave the choice open
+- **Image Steering**: Add a line of your own direction that every image prompt must follow
 - **Gemini Narration**: Hear poems and model responses performed with distinct voices
+- **Read Replies Aloud**: Have each companion answer narrated as it arrives
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 
 ## Technology Stack
@@ -46,7 +49,7 @@ collections from the same interface.
 ## Collections
 
 The site does not hard-code a single poet. On load it reads `books.json` and
-builds a switcher in the header from it. Today four collections are listed:
+builds a switcher in the header from it. Today five collections are listed:
 
 | Collection | Poems file | Source |
 | --- | --- | --- |
@@ -54,6 +57,7 @@ builds a switcher in the header from it. Today four collections are listed:
 | Leaves of Grass, by Walt Whitman | `poems-whitman.json` | Gutenberg ebook 1322 — 376 poems |
 | Baudelaire · Huneker | `poems-baudelaire.json` | Huneker edition, 1919 — Gutenberg ebook 36287 — 68 pieces |
 | Baudelaire · Scott | `poems-baudelaire-scott.json` | Cyril Scott translation, 1909 — Gutenberg ebook 36098 — 54 poems |
+| Miscellaneous | none — browser storage | The reader, not a Gutenberg ebook — poems pasted in by hand |
 
 Choosing a collection swaps the poems, the page's titles and description, the
 source credit, and the persona the AI companion speaks with. The choice is
@@ -86,6 +90,48 @@ than Baudelaire's French, and that a striking turn of phrase may be the
 translator's choice rather than the poet's. That instruction is why the
 Baudelaire profiles run longer than the other books'.
 
+### Miscellaneous
+
+The fifth collection has no edition behind it. Its poems come from the reader,
+so its `books.json` entry carries no `poems` file at all; instead it sets
+`"userPoems": true`, and the poems are read from and written to browser storage
+under the key `john-donne-user-poems`. Nothing is uploaded except to the same
+model, image, and narration servers the other collections already use.
+
+Selecting it reveals a **Paste a poem** panel above the poem grid, taking a
+title, an optional poet, and the poem text. Poems added there appear in the grid
+immediately, and each card in that collection carries a `×` to remove it again.
+Everything else — search, recently visited, the companion, visual companions,
+narration — behaves as it does in the other books.
+
+Because that storage belongs to one browser profile and nothing else, the panel
+also offers **Export all as JSON**, which saves the shelf as
+`Pasted poems <date>.json`. The button appears only when there is something to
+export. There is no import: restoring a shelf means pasting the poems back in,
+or writing the file's contents to the `john-donne-user-poems` key by hand.
+
+Line breaks are preserved exactly as pasted. Only the line endings themselves
+are normalised, and runs of four or more blank lines are collapsed, so a poem
+keeps its own lineation rather than being reflowed. Adding a poem whose title
+and text both match one already on the shelf is refused.
+
+The prompt text differs from the other books' for the same reason the Baudelaire
+profiles do: what is true of the source has to be said outright. With no edition
+behind it, the `authorProfile` tells the companion the author may be named in the
+entry or may be unknown, that it must not guess at authorship, date, or
+publication, and that it must not invent biographical or historical background —
+if the author is unknown it should say so and read the poem on its own terms. The
+`sourceProfile` says there is no scholarly edition or editorial apparatus, so
+spelling, punctuation, and lineation are to be taken as given rather than
+attributed to an editor.
+
+A pasted poem that names its own poet has that name used wherever an author is
+needed: an `Attributed by the reader to:` line in the chat prompt, the poet in
+the image prompts, and the leading segment of download filenames. A poem with no
+poet named falls back to the collection's `poet` value — the phrase "an unnamed
+poet" — in prose, while the filename simply omits the segment rather than reading
+as prose.
+
 ### What a book entry holds
 
 Each entry in `books.json` carries that collection's display strings — `title`,
@@ -98,7 +144,9 @@ Each entry in `books.json` carries that collection's display strings — `title`
 | `readerProfile`, `readingScene`, `readingNotes` | The Gemini narration voice and its performance direction |
 
 Adding a collection is a matter of adding a JSON entry and a poems file. No
-front-end code changes.
+front-end code changes. The Miscellaneous entry is the one exception to the
+poems file: it sets `"userPoems": true` instead, and the front end reads its
+poems from browser storage rather than fetching a file.
 
 ### `stripEditorialApparatus`
 
@@ -192,6 +240,13 @@ sentences and lowers the reply token ceiling. It applies from the next message
 onward, including in conversations already underway, and the setting persists
 across reloads.
 
+Beside it sits **Read replies**, which narrates each answer aloud as it arrives
+in the Iapetus voice. Like **Be brief** it is read at send time rather than when
+the conversation opens, so it can be turned on or off mid-conversation and takes
+effect from the next turn. Only a freshly generated reply plays itself; a
+conversation restored from browser storage renders its saved answers with their
+listen controls but does not narrate them on load.
+
 Image generation requires the FLUX access key. Enter it once in the Visual
 Companions panel; it is saved only in browser storage. Alternatively, provide
 the key to the local server process without exposing it to browser JavaScript:
@@ -211,6 +266,13 @@ from the style and composition direction alone — the poem's words are never se
 to FLUX. (`negative_prompt` is left `null`: this FLUX build rejects it unless
 started with `--sdxl`.)
 
+Each prompt now opens with the medium and restates it at the end. The style
+clause used to follow the model-written scene description, and a concrete scene
+of some seventy words simply outweighed it, so every style came out looking much
+the same. Leading with the medium, saying that it governs the whole image, and
+closing with an instruction to render every part of it in that medium is what
+makes the chosen styles actually differ from one another.
+
 Short poems receive one image, with progressively longer poems receiving up to
 five distinct visual interpretations. Conversation history and generated-image
 records are stored separately for each poem in browser storage.
@@ -223,6 +285,14 @@ them if a poem earns more images than the reader has chosen styles. The
 selection is kept in browser storage under a per-browser key, so it holds across
 reloads and applies to every collection; labels that no longer exist in the
 style list are quietly dropped when it loads.
+
+Below the styles is **Steer the images**, a free-text field of up to 200
+characters — "at night, seen from a distance, with the sea just visible" — that
+is appended to every image prompt. It is stated last among the content
+directions and given precedence, told plainly to be followed even where it
+departs from the subject, so it can override the scene description the model
+wrote rather than merely adding to it. Like the style selection it is kept in
+browser storage, so it holds across reloads until it is cleared.
 
 Poem narration uses `gemini-3.1-flash-tts-preview`. Set the Gemini key on the
 local server (recommended), or enter it once in the narration panel:
@@ -239,11 +309,23 @@ also has its own listen control using the distinct, clear Iapetus voice. The
 WAV performances are stored in IndexedDB and automatically reused for the same
 poem, selected voice, or saved model response on later visits.
 
+The server also keeps the last few readings it generated — eight at most, oldest
+discarded — and serves each from a path ending in a real filename, along the
+lines of `Poet - Poem - Gacrux.wav`. The player loads that path in preference to
+a blob URL, purely so that the browser's own audio-player download menu names
+the file properly: a blob URL saves as `download.wav` whatever the page asks for.
+That handler answers HTTP byte-range requests, because Safari will not play media
+that cannot. A reading restored from browser storage on a later visit has no
+server copy behind it and falls back to a blob URL; the explicit **Download**
+link beside the player still names it correctly in either case.
+
 ### Parsing Poems
 
 Every Project Gutenberg edition is marked up differently, so there is one parser
 per source. A new collection needs its own parser; there is no generic importer
-that accepts an arbitrary Gutenberg URL.
+that accepts an arbitrary Gutenberg URL. The Miscellaneous collection is the
+exception, and the only route around that: it has no source file and no parser,
+because its poems are pasted in through the browser.
 
 To re-parse the Donne text:
 
@@ -342,6 +424,9 @@ The second Baudelaire collection is based on:
 - Translated into English verse by Cyril Scott
 - London: Elkin Mathews, 1909
 - Available at [Project Gutenberg](https://www.gutenberg.org/cache/epub/36098/pg36098.txt) (ebook 36098)
+
+The Miscellaneous collection has no source of its own. Its poems are pasted in
+by the reader and held in that reader's browser.
 
 ## License
 

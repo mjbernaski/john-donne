@@ -423,6 +423,18 @@ body {
     color: #8b2f29;
 }
 
+.paste-buttons {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* The export shares the quiet download idiom but is a button, not a link. */
+.paste-buttons .media-download {
+    border: 0;
+    background: none;
+}
+
 .paste-submit {
     flex: 0 0 auto;
     padding: 12px 22px;

@@ -47,6 +47,7 @@ const pasteTitleInput = document.getElementById('pasteTitleInput');
 const pasteAuthorInput = document.getElementById('pasteAuthorInput');
 const pasteTextInput = document.getElementById('pasteTextInput');
 const pasteStatus = document.getElementById('pasteStatus');
+const exportPoems = document.getElementById('exportPoems');
 const searchInput = document.getElementById('searchInput');
 const clearSearch = document.getElementById('clearSearch');
 const resultCount = document.getElementById('resultCount');
@@ -203,6 +204,7 @@ async function selectBook(bookId) {
     filteredPoems = allPoems;
     displayPoems(allPoems);
     updateResultCount(allPoems.length, allPoems.length);
+    updateExportButton();
     loadRecentlyVisited();
 }
 
@@ -273,6 +275,7 @@ function addUserPoem(event) {
     clearSearch.style.display = 'none';
     displayPoems(allPoems);
     updateResultCount(allPoems.length, allPoems.length);
+    updateExportButton();
     pasteTitleInput.focus();
 }
 
@@ -285,6 +288,7 @@ function removeUserPoem(poem) {
     filteredPoems = allPoems;
     displayPoems(allPoems);
     updateResultCount(allPoems.length, allPoems.length);
+    updateExportButton();
     renderRecentlyVisited();
     setPasteStatus(`“${poem.title}” removed.`, 'done');
 }
@@ -292,6 +296,28 @@ function removeUserPoem(poem) {
 function setPasteStatus(message, state = '') {
     pasteStatus.textContent = message;
     pasteStatus.dataset.state = state;
+}
+
+// Pasted poems exist only in this browser, so they are worth being able to keep.
+function exportUserPoems() {
+    const poems = loadUserPoems();
+    if (!poems.length) return;
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([JSON.stringify(poems, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Pasted poems ${stamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setPasteStatus(`${poems.length} poem${poems.length === 1 ? '' : 's'} exported.`, 'done');
+}
+
+function updateExportButton() {
+    exportPoems.hidden = !(currentBook && currentBook.userPoems && allPoems.length);
 }
 
 function applyBookIdentity(book) {
@@ -2067,6 +2093,7 @@ chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
 imageSteer.addEventListener('change', saveSteerText);
 pasteForm.addEventListener('submit', addUserPoem);
+exportPoems.addEventListener('click', exportUserPoems);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
 imageApiKey.addEventListener('keydown', event => {
