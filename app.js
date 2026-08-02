@@ -974,10 +974,21 @@ function appendChatMessage(role, content, pending = false, options = {}) {
     return { message, body };
 }
 
+// A pasted poem has no edition behind it, so it must not be welcomed as though
+// it came from Project Gutenberg with a named poet.
+function buildChatWelcome(poem) {
+    if (currentBook.userPoems) {
+        return poem.author
+            ? `I have the full text of “${poem.title},” which you pasted in and attributed to ${poem.author}. What would you like to explore?`
+            : `I have the full text of “${poem.title}” as you pasted it, with no author given. What would you like to explore?`;
+    }
+    return `I have the full text of “${poem.title},” along with context about ${currentBook.poet} and the Project Gutenberg source. What would you like to explore?`;
+}
+
 function renderChatWelcome() {
     appendChatMessage(
         'assistant',
-        `I have the full text of “${currentPoem.title},” along with context about ${currentBook.poet} and the Project Gutenberg source. What would you like to explore?`,
+        buildChatWelcome(currentPoem),
         false,
         { listen: false }
     );

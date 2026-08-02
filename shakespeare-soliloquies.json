@@ -1,0 +1,248 @@
+[
+ {
+  "play": "Hamlet",
+  "opening": "O that this too too solid flesh would melt",
+  "speaker": "Hamlet",
+  "reference": "Act 1, Scene 2"
+ },
+ {
+  "play": "Hamlet",
+  "opening": "O, what a rogue and peasant slave am I",
+  "speaker": "Hamlet",
+  "reference": "Act 2 Scene 2"
+ },
+ {
+  "play": "Hamlet",
+  "opening": "To be, or not to be",
+  "speaker": "Hamlet",
+  "reference": "Act 3, Scene 1"
+ },
+ {
+  "play": "Hamlet",
+  "opening": "Oh my offence is rank, it smells to heaven",
+  "speaker": "Claudius",
+  "reference": "Act 3, Scene 3"
+ },
+ {
+  "play": "Hamlet",
+  "opening": "Now might I do it pat",
+  "speaker": "Hamlet",
+  "reference": "Act 3, Scene 3"
+ },
+ {
+  "play": "Hamlet",
+  "opening": "How all occasions do inform against me",
+  "speaker": "Hamlet",
+  "reference": "Act 4, Scene 4"
+ },
+ {
+  "play": "Macbeth",
+  "opening": "The raven himself is hoarse",
+  "speaker": "Lady Macbeth",
+  "reference": "Act 1, Scene 5"
+ },
+ {
+  "play": "Macbeth",
+  "opening": "If it were done when ’tis done",
+  "speaker": "Macbeth",
+  "reference": "Act 1, Scene 7"
+ },
+ {
+  "play": "Macbeth",
+  "opening": "Is this a dagger which I see before me",
+  "speaker": "Macbeth",
+  "reference": "Act 2, Scene 1"
+ },
+ {
+  "play": "Macbeth",
+  "opening": "Tomorrow, and tomorrow, and tomorrow",
+  "speaker": "Macbeth",
+  "reference": "Act 5 Scene 5"
+ },
+ {
+  "play": "King Lear",
+  "opening": "Blow, wind and crack your cheeks!",
+  "speaker": "King Lear",
+  "reference": "Act 3, Scene 2"
+ },
+ {
+  "play": "King Lear",
+  "opening": "O, reason not the need!",
+  "speaker": "King Lear",
+  "reference": "Act 2, Scene 4"
+ },
+ {
+  "play": "King Lear",
+  "opening": "This is the excellent foppery of the world",
+  "speaker": "Edmund",
+  "reference": "Act 1, Scene 2"
+ },
+ {
+  "play": "King Lear",
+  "opening": "Thou, Nature, art my goddess",
+  "speaker": "Edmund",
+  "reference": "Act 1, Scene 2"
+ },
+ {
+  "play": "King Lear",
+  "opening": "Unhappy that I am, I cannot heave my heart into my mouth",
+  "speaker": "Cordelia",
+  "reference": "Act 2, Scene 4"
+ },
+ {
+  "play": "Othello",
+  "opening": "And what’s he then that says I play the villain",
+  "speaker": "Iago",
+  "reference": "Act 2, Scene 3"
+ },
+ {
+  "play": "Othello",
+  "opening": "Her father loved me, oft invited me",
+  "speaker": "Othello",
+  "reference": "Act 1, Scene 3"
+ },
+ {
+  "play": "Othello",
+  "opening": "It is the cause",
+  "speaker": "Othello",
+  "reference": "Act 5, Scene 2"
+ },
+ {
+  "play": "Othello",
+  "opening": "That I did love the Moor",
+  "speaker": "Desdemona",
+  "reference": "Act 1, Scene 3"
+ },
+ {
+  "play": "Othello",
+  "opening": "Virtue! A fig!",
+  "speaker": "Iago",
+  "reference": "Act 1, Scene 3"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "O, she doth teach the torches to burn bright",
+  "speaker": "Romeo",
+  "reference": "Act 1, Scene 1"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "What light through yonder window breaks?",
+  "speaker": "Romeo",
+  "reference": "Act 2, Scene 2"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "The clock struck nine when I did send the nurse",
+  "speaker": "Juliet",
+  "reference": "Act 2, Scene 5"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "Gallop apace, you fiery-footed steeds",
+  "speaker": "Juliet",
+  "reference": "Act 3 Scene 2"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "How oft when men are at the point of death",
+  "speaker": "Romeo",
+  "reference": "Act 5, Scene 3"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "It is the east and Juliet is the sun",
+  "speaker": "Romeo",
+  "reference": "Act 2, Scene 2"
+ },
+ {
+  "play": "Romeo and Juliet",
+  "opening": "What’s in a name?",
+  "speaker": "Juliet",
+  "reference": "Act 2, Scene 2"
+ },
+ {
+  "play": "The Tempest",
+  "opening": "All the infections that the sun sucks up",
+  "speaker": "Caliban",
+  "reference": "Act 2 Scene 2"
+ },
+ {
+  "play": "The Tempest",
+  "opening": "I boarded the King’s ship",
+  "speaker": "Ariel",
+  "reference": "Act 1, Scene 2"
+ },
+ {
+  "play": "The Tempest",
+  "opening": "I must eat my dinner",
+  "speaker": "Caliban",
+  "reference": "Act 1, Scene 2"
+ },
+ {
+  "play": "The Tempest",
+  "opening": "Ye elves of hills, brooks, standing lakes and groves",
+  "speaker": "Prospero",
+  "reference": "Act 5, Scene 1"
+ },
+ {
+  "play": "The Tempest",
+  "opening": "You are three men of sin",
+  "speaker": "Ariel",
+  "reference": "Act 3, Scene 3"
+ },
+ {
+  "play": "The Merchant of Venice",
+  "opening": "How sweet the moonlight sleeps upon the bank",
+  "speaker": "Lorenzo",
+  "reference": "Act 5, Scene 1"
+ },
+ {
+  "play": "The Merchant of Venice",
+  "opening": "I am arm’d and well prepared",
+  "speaker": "Antonio",
+  "reference": "Act 4, Scene 1"
+ },
+ {
+  "play": "The Merchant of Venice",
+  "opening": "Signior Antonio, many a time and oft",
+  "speaker": "Shylock",
+  "reference": "Act 1, Scene 3"
+ },
+ {
+  "play": "The Merchant of Venice",
+  "opening": "The quality of mercy is not strained",
+  "speaker": "Portia",
+  "reference": "Act 4, Scene 1"
+ },
+ {
+  "play": "The Merchant of Venice",
+  "opening": "To bait fish withal",
+  "speaker": "Shylock",
+  "reference": "Act 3, Scene 1"
+ },
+ {
+  "play": "A Midsummer Night's Dream",
+  "opening": "Full of vexation come I, with complaint",
+  "speaker": "Egeus",
+  "reference": "Act 1, Scene 1"
+ },
+ {
+  "play": "A Midsummer Night's Dream",
+  "opening": "I am that merry wanderer of the night",
+  "speaker": "Puck",
+  "reference": "Act 2, Scene 1"
+ },
+ {
+  "play": "A Midsummer Night's Dream",
+  "opening": "I know a bank where the wild thyme blows",
+  "speaker": "Oberon",
+  "reference": "Act 2, Scene 1"
+ },
+ {
+  "play": "A Midsummer Night's Dream",
+  "opening": "My mistress with a monster is in love",
+  "speaker": "Portia",
+  "reference": "Act 4, Scene 1"
+ }
+]

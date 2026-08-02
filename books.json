@@ -77,6 +77,25 @@
       "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience."
     },
     {
+      "id": "shakespeare",
+      "name": "Shakespeare",
+      "title": "Shakespeare's Soliloquies",
+      "subtitle": "Forty-one speeches from eight plays",
+      "description": "William Shakespeare (1564-1616) wrote his greatest introspection not as lyric but as speech: a character alone on stage, thinking aloud. These are the best-known soliloquies from eight plays, taken from the Complete Works.",
+      "poems": "poems-shakespeare.json",
+      "companionLabel": "Shakespeare companion",
+      "chatContext": "William Shakespeare · Complete Works · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/ebooks/100",
+      "sourceNote": "The Complete Works of William Shakespeare, Project Gutenberg ebook 100",
+      "stripEditorialApparatus": false,
+      "poet": "William Shakespeare",
+      "authorProfile": "William Shakespeare (1564–1616), English playwright and poet. IMPORTANT: each text here is a soliloquy, a speech delivered by a character alone on stage within a play, not a lyric poem in the poet's own voice. Read it as that character speaking at that moment: attend to who is listening, what has just happened, what the speaker wants, and where they are deceiving themselves or the audience. Never treat the speaker's opinions as Shakespeare's own. The play, speaker, act, and scene are given with each speech; use them.",
+      "sourceProfile": "The Complete Works of William Shakespeare, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/100. Each speech is taken from that text exactly as printed, including its archaic spellings and elisions. Line numbering and act or scene divisions follow that edition and may differ from others.",
+      "readingNotes": "Perform it as a character thinking aloud, not as a recitation. Let the argument turn and change direction as it does on the page, sustain the verse line without singsong, and let pauses fall where the thought breaks rather than at every line ending. Keep the archaic elisions as written.",
+      "readingScene": "A bare stage with a live room around the voice, an audience present but unaddressed.",
+      "readerProfile": "A classically trained actor performing a soliloquy, intimate and unforced, thinking the words rather than declaiming them."
+    },
+    {
       "id": "miscellaneous",
       "name": "Miscellaneous",
       "title": "Miscellaneous",
