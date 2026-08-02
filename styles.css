@@ -440,6 +440,55 @@ body {
     background: none;
 }
 
+.paste-voice {
+    flex: 0 0 auto;
+    padding: 9px 10px;
+    border: 1px solid #c9bbaa;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--text-color);
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+}
+
+.paste-read {
+    flex: 0 0 auto;
+    padding: 11px 18px;
+    border: 1px solid var(--secondary-color);
+    border-radius: 999px;
+    background: none;
+    color: var(--secondary-color);
+    font: 700 0.74rem/1.2 var(--font-sans);
+    letter-spacing: 0.025em;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.paste-read:hover:not(:disabled) {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.paste-read:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+.paste-read:focus-visible,
+.paste-voice:focus-visible {
+    outline: 3px solid rgba(212, 175, 55, 0.48);
+    outline-offset: 3px;
+}
+
+.paste-audio {
+    width: 100%;
+    margin-top: 14px;
+}
+
+.paste-audio[hidden] {
+    display: none;
+}
+
 .paste-submit {
     flex: 0 0 auto;
     padding: 12px 22px;

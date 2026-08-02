@@ -46,6 +46,10 @@ const pastePanel = document.getElementById('pastePanel');
 const pasteForm = document.getElementById('pasteForm');
 const pasteTitleInput = document.getElementById('pasteTitleInput');
 const pasteAuthorInput = document.getElementById('pasteAuthorInput');
+const pasteTranslatorInput = document.getElementById('pasteTranslatorInput');
+const pasteVoice = document.getElementById('pasteVoice');
+const pasteRead = document.getElementById('pasteRead');
+const pasteAudioPlayer = document.getElementById('pasteAudioPlayer');
 const pasteTextInput = document.getElementById('pasteTextInput');
 const pasteStatus = document.getElementById('pasteStatus');
 const exportPoems = document.getElementById('exportPoems');
@@ -223,7 +227,8 @@ function loadUserPoems() {
                 title: poem.title,
                 content: poem.content,
                 firstLine: poem.firstLine || poem.content.split('\n').find(line => line.trim()) || '',
-                ...(poem.author ? { author: poem.author } : {})
+                ...(poem.author ? { author: poem.author } : {}),
+                ...(poem.translator ? { translator: poem.translator } : {})
             }));
     } catch (error) {
         console.warn('Could not read pasted poems:', error);
@@ -245,6 +250,7 @@ function submitUserPoem(event) {
     event.preventDefault();
     const title = pasteTitleInput.value.trim().replace(/\s+/g, ' ');
     const author = pasteAuthorInput.value.trim().replace(/\s+/g, ' ');
+    const translator = pasteTranslatorInput.value.trim().replace(/\s+/g, ' ');
     // Keep the reader's line breaks; only normalise the line endings themselves.
     const content = pasteTextInput.value.replace(/\r\n?/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
 
@@ -274,7 +280,8 @@ function submitUserPoem(event) {
         title,
         content,
         firstLine: content.split('\n').find(line => line.trim()) || '',
-        ...(author ? { author } : {})
+        ...(author ? { author } : {}),
+        ...(translator ? { translator } : {})
     };
 
     if (existing === -1) {
@@ -309,6 +316,7 @@ function startEditingUserPoem(poem) {
     editingPoem = poem;
     pasteTitleInput.value = poem.title;
     pasteAuthorInput.value = poem.author || '';
+    pasteTranslatorInput.value = poem.translator || '';
     pasteTextInput.value = poem.content;
     pasteSubmit.textContent = 'Save changes';
     cancelEdit.hidden = false;
@@ -436,6 +444,45 @@ function setPasteStatus(message, state = '') {
     pasteStatus.dataset.state = state;
 }
 
+// Reading the field aloud does not touch the shelf: the text is narrated as it
+// stands, whether or not it is ever saved as a poem.
+async function readPastedText() {
+    const title = pasteTitleInput.value.trim().replace(/\s+/g, ' ') || 'Untitled';
+    const text = pasteTextInput.value.replace(/\r\n?/g, '\n').trim();
+    const voice = pasteVoice.value;
+
+    if (!text) {
+        setPasteStatus('There is nothing in the poem field to read.', 'error');
+        return;
+    }
+
+    pasteRead.disabled = true;
+    pasteVoice.disabled = true;
+    const wasLabel = pasteRead.textContent;
+    pasteRead.textContent = 'Preparing…';
+    setPasteStatus('Gemini is preparing the reading. Long texts are read in joined sections…');
+
+    try {
+        const author = pasteAuthorInput.value.trim().replace(/\s+/g, ' ');
+        const { blob, namedPath } = await requestGeminiTts(
+            title, text, voice, 'poem',
+            buildDownloadName({ title, author }, [VOICE_NAMES[voice] || voice], 'wav')
+        );
+        const url = namedPath || URL.createObjectURL(blob);
+        pasteAudioPlayer.src = url;
+        pasteAudioPlayer.hidden = false;
+        setPasteStatus('Reading ready. It is not saved to the shelf unless you add it.', 'done');
+        pasteAudioPlayer.play().catch(() => {});
+    } catch (error) {
+        console.error('Could not read the pasted text:', error);
+        setPasteStatus(`Could not read that aloud: ${error.message}`, 'error');
+    } finally {
+        pasteRead.disabled = false;
+        pasteVoice.disabled = false;
+        pasteRead.textContent = wasLabel;
+    }
+}
+
 // Pasted poems exist only in this browser, so they are worth being able to keep.
 function exportUserPoems() {
     const poems = loadUserPoems();
@@ -559,7 +606,7 @@ function displayPoems(poems) {
         return `
             <div class="poem-card" data-index="${index}">
                 <h3 class="poem-title">${escapeHtml(poem.title)}</h3>
-                ${poem.author ? `<p class="poem-byline">${escapeHtml(poem.author)}</p>` : ''}
+                ${poem.author || poem.translator ? `<p class="poem-byline">${escapeHtml([poem.author, poem.translator ? `trans. ${poem.translator}` : ''].filter(Boolean).join(' · '))}</p>` : ''}
                 <p class="poem-preview">${escapeHtml(preview)}</p>
                 <div class="poem-card-footer">
                     <span class="read-more">Read Full Poem →</span>
@@ -914,7 +961,7 @@ SOURCE
 ${currentBook.sourceProfile}
 
 SELECTED POEM
-Title: ${poem.title}${poem.author ? `\nAttributed by the reader to: ${poem.author}` : ''}${poem.section ? `\nCluster: ${poem.section}` : ''}
+Title: ${poem.title}${poem.author ? `\nAttributed by the reader to: ${poem.author}` : ''}${poem.translator ? `\nEnglish translation by: ${poem.translator}. Discuss the translated wording as the translator's choice, not the poet's.` : ''}${poem.section ? `\nCluster: ${poem.section}` : ''}
 
 ${poemText}
 
@@ -2299,6 +2346,7 @@ clearImageStyles.addEventListener('click', clearStyleSelection);
 imageSteer.addEventListener('change', saveSteerText);
 pasteForm.addEventListener('submit', submitUserPoem);
 cancelEdit.addEventListener('click', cancelUserPoemEdit);
+pasteRead.addEventListener('click', readPastedText);
 exportPoems.addEventListener('click', exportUserPoems);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);

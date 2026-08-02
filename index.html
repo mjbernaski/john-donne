@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Poems of John Donne</title>
-    <link rel="stylesheet" href="styles.css?v=20260802-16">
+    <link rel="stylesheet" href="styles.css?v=20260802-17">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
@@ -59,6 +59,10 @@
                         <span>Poet <em>(optional)</em></span>
                         <input id="pasteAuthorInput" type="text" maxlength="120" autocomplete="off">
                     </label>
+                    <label class="paste-field">
+                        <span>Translator <em>(if any)</em></span>
+                        <input id="pasteTranslatorInput" type="text" maxlength="120" autocomplete="off">
+                    </label>
                 </div>
                 <label class="paste-field">
                     <span>Poem</span>
@@ -69,9 +73,15 @@
                     <div class="paste-buttons">
                         <button id="exportPoems" class="media-download" type="button" hidden>Export all as JSON</button>
                         <button id="cancelEdit" class="media-download" type="button" hidden>Cancel</button>
+                        <select id="pasteVoice" class="paste-voice" aria-label="Voice for reading aloud">
+                            <option value="feminine">Feminine · mature</option>
+                            <option value="masculine">Masculine · smooth</option>
+                        </select>
+                        <button id="pasteRead" class="paste-read" type="button">Read it aloud</button>
                         <button id="pasteSubmit" class="paste-submit" type="submit">Add to the shelf</button>
                     </div>
                 </div>
+                <audio id="pasteAudioPlayer" class="paste-audio" controls preload="none" hidden></audio>
             </form>
         </section>
 
@@ -217,6 +227,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260802-16"></script>
+    <script src="app.js?v=20260802-17"></script>
 </body>
 </html>
