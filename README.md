@@ -56,15 +56,41 @@ launchctl print gui/$(id -u)/com.johndonne.poetry-server
 launchctl kickstart -k gui/$(id -u)/com.johndonne.poetry-server
 ```
 
-The poem chat connects directly from the browser to the OpenAI-compatible vLLM
-server at `http://192.168.5.46:8100`. The server must be reachable from the
-reader's device and allow cross-origin requests. Conversation history is kept
-separately for each poem and restored from browser storage after a reload.
+## Service addresses
 
-Image generation uses the FLUX server at `http://192.168.5.40:2222`. Enter its
-access key once in the Visual Companions panel; it is saved only in browser
-storage. Alternatively, provide the key to the local server process without
-exposing it to browser JavaScript:
+Both upstream machines are configured in `config.json`, along with the bind
+address and port:
+
+```json
+{
+  "server": { "host": "0.0.0.0", "port": 8000 },
+  "upstreams": {
+    "flux": "http://192.168.5.40:2222",
+    "vllm": "http://192.168.5.46:8100"
+  }
+}
+```
+
+Change an address there and restart the service; nothing else needs editing.
+The environment variables `FLUX_BASE_URL` and `VLLM_BASE_URL` override the file,
+and `--host`/`--port` override the `server` block.
+
+The browser only ever talks to this server's own origin. Both upstreams are
+reached through allow-listed reverse proxies, so a reader's device never needs
+LAN access to either machine:
+
+| Browser path | Upstream | Allowed endpoints |
+| --- | --- | --- |
+| `/api/chat/*` | vLLM | `/v1/models`, `/v1/chat/completions` |
+| `/api/flux/*` | FLUX | `/status`, `/generate`, `/images/*` |
+
+The chat proxy forwards its response body chunk by chunk, so streamed tokens
+still arrive as they are generated. Conversation history is kept separately for
+each poem and restored from browser storage after a reload.
+
+Image generation requires the FLUX access key. Enter it once in the Visual
+Companions panel; it is saved only in browser storage. Alternatively, provide
+the key to the local server process without exposing it to browser JavaScript:
 
 ```bash
 FLUX_API_KEY=your-key python3 server.py

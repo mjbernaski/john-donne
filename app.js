@@ -2,7 +2,7 @@
 let allPoems = [];
 let filteredPoems = [];
 const poemChatSessions = new WeakMap();
-const VLLM_BASE_URL = 'http://192.168.5.46:8100';
+const CHAT_PROXY_URL = '/api/chat';
 const FALLBACK_MODEL = 'unsloth/gemma-4-26B-A4B-it-NVFP4';
 const FLUX_PROXY_URL = '/api/flux';
 const CHAT_STORAGE_PREFIX = 'john-donne-poem-session-v1:';
@@ -530,7 +530,7 @@ function renderChatSession(session) {
 async function resolveModel(session) {
     if (session.model) return session.model;
     if (!modelRequest) {
-        modelRequest = fetch(`${VLLM_BASE_URL}/v1/models`)
+        modelRequest = fetch(`${CHAT_PROXY_URL}/v1/models`)
             .then(async response => {
                 if (!response.ok) throw new Error(`Model discovery failed (${response.status})`);
                 const payload = await response.json();
@@ -634,7 +634,7 @@ async function sendChatMessage(event) {
     session.abortController = new AbortController();
     try {
         const model = await resolveModel(session);
-        const response = await fetch(`${VLLM_BASE_URL}/v1/chat/completions`, {
+        const response = await fetch(`${CHAT_PROXY_URL}/v1/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: session.abortController.signal,

@@ -31,8 +31,20 @@ def load_local_environment(path: Path) -> None:
             os.environ.setdefault(key, value)
 
 
-load_local_environment(Path(__file__).resolve().with_name(".env"))
-FLUX_BASE_URL = os.environ.get("FLUX_BASE_URL", "http://192.168.5.40:2222").rstrip("/")
+def load_config(path: Path) -> dict:
+    """Read local service addresses from config.json so they change without code edits."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+
+
+BASE_DIR = Path(__file__).resolve().parent
+load_local_environment(BASE_DIR / ".env")
+CONFIG = load_config(BASE_DIR / "config.json")
+UPSTREAMS = CONFIG.get("upstreams", {})
+FLUX_BASE_URL = os.environ.get("FLUX_BASE_URL", UPSTREAMS.get("flux", "http://192.168.5.40:2222")).rstrip("/")
+VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", UPSTREAMS.get("vllm", "http://192.168.5.46:8100")).rstrip("/")
 FLUX_API_KEY = os.environ.get("FLUX_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
@@ -43,10 +55,13 @@ GEMINI_TTS_URL = (
 TTS_VOICES = {"feminine": "Gacrux", "masculine": "Algieba", "companion": "Iapetus"}
 ALLOWED_GET_PATHS = {"/status"}
 ALLOWED_POST_PATHS = {"/generate"}
+ALLOWED_CHAT_GET_PATHS = {"/v1/models"}
+ALLOWED_CHAT_POST_PATHS = {"/v1/chat/completions"}
+CHAT_TIMEOUT = 300
 
 
 class PoetryRequestHandler(SimpleHTTPRequestHandler):
-    """Static-file handler with a small, allow-listed FLUX reverse proxy."""
+    """Static-file handler with small, allow-listed FLUX and model reverse proxies."""
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path.startswith("/api/flux/"):
@@ -55,6 +70,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 self._proxy_flux("GET", upstream_path)
             else:
                 self.send_error(404, "Unknown FLUX endpoint")
+            return
+        if self.path.startswith("/api/chat/"):
+            upstream_path = self.path.removeprefix("/api/chat")
+            if upstream_path in ALLOWED_CHAT_GET_PATHS:
+                self._proxy_chat("GET", upstream_path)
+            else:
+                self.send_error(404, "Unknown model endpoint")
             return
         super().do_GET()
 
@@ -69,7 +91,14 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             else:
                 self.send_error(404, "Unknown FLUX endpoint")
             return
-        self.send_error(405, "POST is only supported for the FLUX proxy and Gemini TTS")
+        if self.path.startswith("/api/chat/"):
+            upstream_path = self.path.removeprefix("/api/chat")
+            if upstream_path in ALLOWED_CHAT_POST_PATHS:
+                self._proxy_chat("POST", upstream_path)
+            else:
+                self.send_error(404, "Unknown model endpoint")
+            return
+        self.send_error(405, "POST is only supported for the proxies and Gemini TTS")
 
     def _generate_tts(self) -> None:
         api_key = GEMINI_API_KEY or self.headers.get("X-Gemini-API-Key", "")
@@ -220,29 +249,61 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
 
     def _proxy_flux(self, method: str, upstream_path: str) -> None:
         api_key = FLUX_API_KEY or self.headers.get("X-API-Key", "")
+        self._proxy(
+            f"{FLUX_BASE_URL}{upstream_path}",
+            method,
+            {"X-API-Key": api_key} if api_key else {},
+            timeout=45,
+            unavailable=lambda reason: {"success": False, "error": f"FLUX server unavailable: {reason}"},
+        )
+
+    def _proxy_chat(self, method: str, upstream_path: str) -> None:
+        """Relay OpenAI-compatible model traffic so browsers never need LAN access."""
+        self._proxy(
+            f"{VLLM_BASE_URL}{upstream_path}",
+            method,
+            {},
+            timeout=CHAT_TIMEOUT,
+            unavailable=lambda reason: {"error": {"message": f"Model server unavailable: {reason}"}},
+            stream=True,
+        )
+
+    def _proxy(self, url: str, method: str, extra_headers: dict, timeout: int, unavailable, stream: bool = False) -> None:
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length) if length else None
-        headers = {"Accept": self.headers.get("Accept", "application/json")}
-        if api_key:
-            headers["X-API-Key"] = api_key
+        headers = {"Accept": self.headers.get("Accept", "application/json"), **extra_headers}
         if body is not None:
             headers["Content-Type"] = self.headers.get("Content-Type", "application/json")
 
-        request = Request(
-            f"{FLUX_BASE_URL}{upstream_path}",
-            data=body,
-            headers=headers,
-            method=method,
-        )
+        request = Request(url, data=body, headers=headers, method=method)
         try:
-            with urlopen(request, timeout=45) as response:
-                self._send_proxy_response(response.status, response.headers, response.read())
+            with urlopen(request, timeout=timeout) as response:
+                if stream:
+                    self._stream_proxy_response(response)
+                else:
+                    self._send_proxy_response(response.status, response.headers, response.read())
         except HTTPError as error:
             self._send_proxy_response(error.code, error.headers, error.read())
         except (URLError, TimeoutError) as error:
             reason = getattr(error, "reason", str(error))
-            message = json.dumps({"success": False, "error": f"FLUX server unavailable: {reason}"})
+            message = json.dumps(unavailable(reason))
             self._send_proxy_response(502, {"Content-Type": "application/json"}, message.encode())
+
+    def _stream_proxy_response(self, response) -> None:
+        """Forward the body chunk by chunk, without Content-Length, to keep tokens live."""
+        self.send_response(response.status)
+        self.send_header("Content-Type", response.headers.get("Content-Type", "application/octet-stream"))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            while True:
+                chunk = response.read1(8192)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # The reader stopped the response or closed the page.
 
     def _send_proxy_response(self, status: int, headers, body: bytes) -> None:
         self.send_response(status)
@@ -254,15 +315,17 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
 
 
 def main() -> None:
+    server_config = CONFIG.get("server", {})
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", default="0.0.0.0", help="bind address (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8000, help="port (default: 8000)")
+    parser.add_argument("--host", default=server_config.get("host", "0.0.0.0"), help="bind address")
+    parser.add_argument("--port", type=int, default=server_config.get("port", 8000), help="port")
     args = parser.parse_args()
 
-    os.chdir(Path(__file__).resolve().parent)
+    os.chdir(BASE_DIR)
     server = ThreadingHTTPServer((args.host, args.port), PoetryRequestHandler)
     print(f"Serving John Donne poems at http://{args.host}:{args.port}")
     print(f"Proxying image requests to {FLUX_BASE_URL}")
+    print(f"Proxying model requests to {VLLM_BASE_URL}")
     server.serve_forever()
 
 
