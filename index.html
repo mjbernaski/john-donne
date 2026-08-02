@@ -13,10 +13,11 @@
     <div class="container">
         <header class="header">
             <div class="header-content">
-                <h1 class="title">The Poems of John Donne</h1>
-                <p class="subtitle">A Collection from Project Gutenberg</p>
-                <p class="description">
-                    John Donne (1572-1631) was an English poet, scholar, soldier and secretary. 
+                <nav id="bookSwitcher" class="book-switcher" aria-label="Choose a collection"></nav>
+                <h1 id="bookTitle" class="title">The Poems of John Donne</h1>
+                <p id="bookSubtitle" class="subtitle">A Collection from Project Gutenberg</p>
+                <p id="bookDescription" class="description">
+                    John Donne (1572-1631) was an English poet, scholar, soldier and secretary.
                     He is considered the pre-eminent representative of the metaphysical poets.
                 </p>
             </div>
@@ -111,7 +112,7 @@
                         <header class="chat-header">
                             <p class="chat-eyebrow">Dedicated poem session</p>
                             <h3 id="chatTitle" class="chat-title">Discuss this poem</h3>
-                            <p class="chat-context">John Donne · Grierson edition · Project Gutenberg</p>
+                            <p id="chatContext" class="chat-context">John Donne · Grierson edition · Project Gutenberg</p>
                             <div class="chat-status-row">
                                 <span id="chatStatus" class="chat-status" data-state="connecting">Connecting to model…</span>
                                 <div class="chat-controls">
@@ -147,11 +148,11 @@
 
         <footer class="footer">
             <p>
-                Source: <a href="https://www.gutenberg.org/files/48688/48688-h/48688-h.htm" target="_blank" rel="noopener">
+                Source: <a id="bookSourceLink" href="https://www.gutenberg.org/files/48688/48688-h/48688-h.htm" target="_blank" rel="noopener">
                     Project Gutenberg
                 </a>
             </p>
-            <p class="footer-note">
+            <p id="bookSourceNote" class="footer-note">
                 The Poems of John Donne, Edited by Herbert J. C. Grierson (1912)
             </p>
         </footer>
@@ -162,6 +163,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260802-2"></script>
+    <script src="app.js?v=20260802-3"></script>
 </body>
 </html>

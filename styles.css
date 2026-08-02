@@ -86,6 +86,56 @@ body {
     margin: 0 auto;
 }
 
+.book-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto 26px;
+    padding: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.book-switcher[hidden] {
+    display: none;
+}
+
+.book-switch {
+    padding: 9px 18px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    font: 700 0.68rem/1.2 var(--font-sans);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.book-switch:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.14);
+    color: white;
+}
+
+.book-switch--active,
+.book-switch--active:hover {
+    border-color: transparent;
+    background: var(--bg-color);
+    color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.book-switch:focus-visible {
+    outline: 3px solid rgba(212, 175, 55, 0.48);
+    outline-offset: 3px;
+}
+
 .title {
     font-family: var(--font-serif);
     font-size: 3.5rem;
@@ -1248,6 +1298,19 @@ body {
 
     .header {
         padding: 40px 15px;
+    }
+
+    .book-switcher {
+        gap: 4px;
+        margin-bottom: 20px;
+        padding: 4px;
+        border-radius: 18px;
+    }
+
+    .book-switch {
+        padding: 8px 13px;
+        font-size: 0.62rem;
+        letter-spacing: 0.07em;
     }
 
     .title {

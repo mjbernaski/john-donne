@@ -39,9 +39,20 @@ def load_config(path: Path) -> dict:
         return {}
 
 
+def load_books(path: Path) -> list[dict]:
+    """Read the per-book narration settings so prompts are not tied to one poet."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("books", [])
+    except FileNotFoundError:
+        return []
+
+
 BASE_DIR = Path(__file__).resolve().parent
 load_local_environment(BASE_DIR / ".env")
 CONFIG = load_config(BASE_DIR / "config.json")
+BOOKS = load_books(BASE_DIR / "books.json")
+BOOKS_BY_ID = {str(book.get("id", "")): book for book in BOOKS if book.get("id")}
+DEFAULT_BOOK = BOOKS[0] if BOOKS else {}
 UPSTREAMS = CONFIG.get("upstreams", {})
 FLUX_BASE_URL = os.environ.get("FLUX_BASE_URL", UPSTREAMS.get("flux", "http://192.168.5.40:2222")).rstrip("/")
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", UPSTREAMS.get("vllm", "http://192.168.5.46:8100")).rstrip("/")
@@ -117,11 +128,12 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"error": "title, text, kind, and a supported voice are required."})
                 return
 
+            book = self._resolve_book(payload.get("book"))
             pcm_chunks = []
             chunks = self._split_tts_text(text)
             for index, chunk in enumerate(chunks):
                 transcript = f"{title}.\n\n{chunk}" if kind == "poem" and index == 0 else chunk
-                prompt = self._build_tts_prompt(transcript, index, len(chunks), kind)
+                prompt = self._build_tts_prompt(transcript, index, len(chunks), kind, book)
                 pcm_chunks.append(self._request_gemini_audio(api_key, voice, prompt))
 
             audio_buffer = io.BytesIO()
@@ -181,22 +193,31 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         return chunks
 
     @staticmethod
-    def _build_tts_prompt(transcript: str, index: int, total: int, kind: str) -> str:
+    def _resolve_book(book_id) -> dict:
+        """Map the requested book id onto a books.json record; never trust the raw value."""
+        return BOOKS_BY_ID.get(str(book_id or ""), DEFAULT_BOOK)
+
+    @staticmethod
+    def _build_tts_prompt(transcript: str, index: int, total: int, kind: str, book: dict) -> str:
         continuation = "This is a continuation; preserve the established voice and cadence." if index else ""
+        poet = str(book.get("poet", "the poet"))
         if kind == "response":
             return f"""Synthesize speech for an exact reading of literary commentary. Do not speak these directions.
 
-AUDIO PROFILE: A clear, warm literary companion explaining John Donne to an attentive reader.
+AUDIO PROFILE: A clear, warm literary companion explaining {poet} to an attentive reader.
 DIRECTOR'S NOTES: Natural and conversational, with intelligent emphasis and an unhurried explanatory cadence. Make quotations distinct without theatrical exaggeration. Do not add, omit, summarize, explain, or repeat any words. {continuation}
 PART: {index + 1} of {total}
 
 TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
 {transcript}"""
+        reader_profile = str(book.get("readerProfile", f"A seasoned reader of poetry performing {poet} for an attentive audience."))
+        reading_scene = str(book.get("readingScene", "A quiet reading room with close, warm acoustics."))
+        reading_notes = str(book.get("readingNotes", "Measured and contemplative, but never flat. Use intelligent rhetorical emphasis, natural breath at line endings, and slightly longer pauses between stanzas."))
         return f"""Synthesize speech for an exact literary reading. Do not speak these directions.
 
-AUDIO PROFILE: A seasoned reader of English metaphysical poetry performing John Donne for an attentive, intimate audience.
-SCENE: A quiet wood-paneled reading room with close, warm acoustics.
-DIRECTOR'S NOTES: Measured and contemplative, but never flat. Use intelligent rhetorical emphasis, subtle emotional warmth, natural breath at line endings, and slightly longer pauses between stanzas. Preserve Donne's wit, argument, tension, and sensual or devotional energy as the text requires. Use clear modern English pronunciation while respecting archaic words. Do not add, omit, explain, modernize, or repeat any words. {continuation}
+AUDIO PROFILE: {reader_profile}
+SCENE: {reading_scene}
+DIRECTOR'S NOTES: {reading_notes} Do not add, omit, explain, modernize, or repeat any words. {continuation}
 PART: {index + 1} of {total}
 
 TRANSCRIPT — SPEAK ONLY THE TEXT BELOW

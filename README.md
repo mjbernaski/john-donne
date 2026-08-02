@@ -1,10 +1,14 @@
 # John Donne Poetry Website
 
-A beautiful, modern website displaying the complete poems of John Donne, sourced from Project Gutenberg.
+A beautiful, modern website displaying complete poetry collections sourced from
+Project Gutenberg. It began with the poems of John Donne and now serves several
+collections from the same interface.
 
 ## Features
 
-- **289 Poems**: Complete collection of John Donne's poetry from the 1912 edition edited by Herbert J. C. Grierson
+- **Multiple Collections**: Switch between the poetry books listed in `books.json` from the site header
+- **289 Donne Poems**: Complete collection of John Donne's poetry from the 1912 edition edited by Herbert J. C. Grierson
+- **376 Whitman Poems**: The complete 1891-92 arrangement of *Leaves of Grass*
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
 - **Modal View**: Read full poems in a clean, focused modal interface
@@ -27,8 +31,55 @@ A beautiful, modern website displaying the complete poems of John Donne, sourced
 - `styles.css` - Complete styling and responsive design
 - `app.js` - JavaScript for interactivity, search, and modal functionality
 - `server.py` - Static development server and authenticated FLUX request proxy
-- `poems.json` - Parsed poem data (289 poems)
-- `parse_poems.py` - Python script to parse poems from Project Gutenberg source
+- `books.json` - The list of collections the site offers, and everything specific to each
+- `poems.json` - Parsed Donne poem data (289 poems)
+- `poems-whitman.json` - Parsed *Leaves of Grass* data (376 poems)
+- `parse_poems.py` - Python script to parse the Donne text from Project Gutenberg source
+- `parse_whitman.py` - Python script to parse *Leaves of Grass* from Project Gutenberg source
+
+## Collections
+
+The site does not hard-code a single poet. On load it reads `books.json` and
+builds a switcher in the header from it. Today two collections are listed:
+
+| Collection | Poems file | Source |
+| --- | --- | --- |
+| The Poems of John Donne | `poems.json` | Grierson edition, 1912 — Gutenberg ebook 48688 |
+| Leaves of Grass, by Walt Whitman | `poems-whitman.json` | Gutenberg ebook 1322 — 376 poems |
+
+Choosing a collection swaps the poems, the page's titles and description, the
+source credit, and the persona the AI companion speaks with. The choice is
+remembered in browser storage, so a reader returns to the book they left.
+
+Recently-visited lists are kept per collection, since a poem identifier from one
+book never resolves in another. Saved chat sessions and generated audio, by
+contrast, are keyed by a hash of the poem's title and text rather than by its
+position in a file, so they never collide between collections and survive a
+re-parse that reorders the poems.
+
+### What a book entry holds
+
+Each entry in `books.json` carries that collection's display strings — `title`,
+`subtitle`, `description`, `sourceUrl`, `sourceNote`, `chatContext`, and
+`companionLabel` — alongside the text used to build prompts:
+
+| Field | Used for |
+| --- | --- |
+| `poet`, `authorProfile`, `sourceProfile` | The chat companion's briefing and the image prompts |
+| `readerProfile`, `readingScene`, `readingNotes` | The Gemini narration voice and its performance direction |
+
+Adding a collection is a matter of adding a JSON entry and a poems file. No
+front-end code changes.
+
+### `stripEditorialApparatus`
+
+This per-book boolean controls whether the front end applies the
+Grierson-specific cleanup that removes textual variants and manuscript sigla
+from a poem before displaying it. It is `true` for Donne and **must be `false`
+for any edition without such an apparatus**. One of its rules ends a poem at the
+first line containing a year between 1500 and 1899, which would truncate many
+Whitman poems — "Year of Meteors (1859-60)" would lose its title line and
+everything after it.
 
 ## Usage
 
@@ -133,24 +184,57 @@ poem, selected voice, or saved model response on later visits.
 
 ### Parsing Poems
 
-To re-parse poems from the Project Gutenberg source:
+Every Project Gutenberg edition is marked up differently, so there is one parser
+per source. A new collection needs its own parser; there is no generic importer
+that accepts an arbitrary Gutenberg URL.
+
+To re-parse the Donne text:
 
 ```bash
-python3 parse_poems.py
+python3 parse_poems.py <gutenberg-source-file> -o poems.json
 ```
+
+To re-parse *Leaves of Grass*:
+
+```bash
+python3 parse_whitman.py 1322-h.htm -o poems-whitman.json
+```
+
+`parse_whitman.py` reads the structure of ebook 1322 directly rather than
+guessing at it. It relies on three properties of that edition:
+
+- Every poem is a `<div class="chapter">` holding an `<h2>` and one or more `<pre>` blocks.
+- Long poems are split across several `<pre>` blocks, which are rejoined into one body.
+- Where a poem opens a cluster, the `<h2>` holds only the book number — "BOOK III" — and the real title sits in a `<p>` above the verse. That is where "Song of Myself" lives.
+
+It also records the cluster name as an optional `section` field on each poem.
 
 ## About John Donne
 
 John Donne (1572-1631) was an English poet, scholar, soldier, and secretary born into a recusant family, who later became a cleric in the Church of England. He is considered the pre-eminent representative of the metaphysical poets. His works are notable for their realistic and sensual style and include sonnets, love poems, religious poems, Latin translations, epigrams, elegies, songs, and satires.
 
-## Source
+## About Walt Whitman
 
-This collection is based on:
+Walt Whitman (1819-1892) was an American poet, essayist, and journalist, and the
+central figure of nineteenth-century American verse. *Leaves of Grass* grew
+across nine editions from 1855 until his death; the collection here is the
+complete 1891-92 arrangement. His long unrhymed line, expansive catalogues, and
+direct address to the reader reshaped American poetry.
+
+## Sources
+
+The Donne collection is based on:
 - **The Poems of John Donne**
 - Edited from the old editions and numerous manuscripts
 - By Herbert J. C. Grierson M.A.
 - Oxford: Clarendon Press, 1912
-- Available at [Project Gutenberg](https://www.gutenberg.org/files/48688/48688-h/48688-h.htm)
+- Available at [Project Gutenberg](https://www.gutenberg.org/files/48688/48688-h/48688-h.htm) (ebook 48688)
+
+The Whitman collection is based on:
+- **Leaves of Grass**
+- By Walt Whitman
+- The complete 1891-92 arrangement
+- Available at [Project Gutenberg](https://www.gutenberg.org/files/1322/1322-h/1322-h.htm) (ebook 1322)
 
 ## License
 

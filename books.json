@@ -1,0 +1,42 @@
+{
+  "books": [
+    {
+      "id": "donne",
+      "name": "John Donne",
+      "title": "The Poems of John Donne",
+      "subtitle": "A Collection from Project Gutenberg",
+      "description": "John Donne (1572-1631) was an English poet, scholar, soldier and secretary. He is considered the pre-eminent representative of the metaphysical poets.",
+      "poems": "poems.json",
+      "companionLabel": "Donne companion",
+      "chatContext": "John Donne · Grierson edition · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/files/48688/48688-h/48688-h.htm",
+      "sourceNote": "The Poems of John Donne, Edited by Herbert J. C. Grierson (1912)",
+      "stripEditorialApparatus": true,
+      "poet": "John Donne",
+      "authorProfile": "John Donne (1572–1631), an English poet and the pre-eminent representative of the metaphysical poets. His writing is known for intellectual argument, dramatic voice, wit, paradox, and extended metaphysical conceits.",
+      "sourceProfile": "The Poems of John Donne, edited by Herbert J. C. Grierson (Oxford: Clarendon Press, 1912), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/48688.",
+      "readingNotes": "Measured and contemplative, but never flat. Use intelligent rhetorical emphasis, subtle emotional warmth, natural breath at line endings, and slightly longer pauses between stanzas. Preserve Donne's wit, argument, tension, and sensual or devotional energy as the text requires. Use clear modern English pronunciation while respecting archaic words.",
+      "readingScene": "A quiet wood-paneled reading room with close, warm acoustics.",
+      "readerProfile": "A seasoned reader of English metaphysical poetry performing John Donne for an attentive, intimate audience."
+    },
+    {
+      "id": "whitman",
+      "name": "Walt Whitman",
+      "title": "Leaves of Grass",
+      "subtitle": "A Collection from Project Gutenberg",
+      "description": "Walt Whitman (1819-1892) was an American poet, essayist and journalist. Leaves of Grass grew across nine editions from 1855 until his death, and its long unrhymed line reshaped American poetry.",
+      "poems": "poems-whitman.json",
+      "companionLabel": "Whitman companion",
+      "chatContext": "Walt Whitman · Leaves of Grass · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/files/1322/1322-h/1322-h.htm",
+      "sourceNote": "Leaves of Grass, by Walt Whitman (1855-1892), Project Gutenberg ebook 1322",
+      "stripEditorialApparatus": false,
+      "poet": "Walt Whitman",
+      "authorProfile": "Walt Whitman (1819–1892), an American poet, essayist, and journalist, and the central figure of nineteenth-century American verse. His writing is known for the long unrhymed line, expansive catalogues, democratic and bodily celebration, direct address to the reader, and a prophetic, oratorical voice.",
+      "sourceProfile": "Leaves of Grass, the complete 1891-92 arrangement, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/1322.",
+      "readingNotes": "Expansive and unhurried, with the momentum of spoken oratory. Let the long lines run without chopping them, breathe at the commas of a catalogue, and build gradually through an accumulating list. Preserve Whitman's exuberance, tenderness, and direct address to the listener. Use clear modern American pronunciation.",
+      "readingScene": "An open room with air and space around the voice, as if addressing a gathered crowd.",
+      "readerProfile": "A seasoned reader of nineteenth-century American poetry performing Walt Whitman for an attentive audience."
+    }
+  ]
+}

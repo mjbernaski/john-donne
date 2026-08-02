@@ -7,6 +7,7 @@ const FALLBACK_MODEL = 'unsloth/gemma-4-26B-A4B-it-NVFP4';
 const FLUX_PROXY_URL = '/api/flux';
 const CHAT_STORAGE_PREFIX = 'john-donne-poem-session-v1:';
 const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
+const SELECTED_BOOK_STORAGE = 'john-donne-selected-book';
 const RECENT_POEMS_LIMIT = 8;
 const IMAGE_API_KEY_STORAGE = 'john-donne-flux-api-key';
 const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
@@ -14,8 +15,8 @@ const BRIEF_MODE_STORAGE = 'john-donne-chat-brief';
 const poemSceneCache = new Map();
 const AUDIO_DB_NAME = 'john-donne-media-v1';
 const AUDIO_STORE_NAME = 'audio';
-const AUTHOR_CONTEXT = 'John Donne (1572–1631), English metaphysical poet';
-const SOURCE_CONTEXT = 'The Poems of John Donne, edited by Herbert J. C. Grierson (1912), Project Gutenberg ebook 48688';
+let allBooks = [];
+let currentBook = null;
 let modelRequest = null;
 let currentPoem = null;
 let currentChatSession = null;
@@ -25,6 +26,13 @@ const responseAudioRequests = new Map();
 let recentPoemIds = [];
 
 // DOM Elements
+const bookSwitcher = document.getElementById('bookSwitcher');
+const bookTitle = document.getElementById('bookTitle');
+const bookSubtitle = document.getElementById('bookSubtitle');
+const bookDescription = document.getElementById('bookDescription');
+const bookSourceLink = document.getElementById('bookSourceLink');
+const bookSourceNote = document.getElementById('bookSourceNote');
+const chatContext = document.getElementById('chatContext');
 const poemsList = document.getElementById('poemsList');
 const searchInput = document.getElementById('searchInput');
 const clearSearch = document.getElementById('clearSearch');
@@ -99,28 +107,110 @@ function showAudioTimeRemaining(audio) {
     updateAudioTimeRemaining();
 }
 
-// Load poems from JSON
-async function loadPoems() {
+// Load the collection manifest, then the poems of the selected book
+async function loadBooks() {
     try {
-        const response = await fetch('poems.json');
+        const response = await fetch('books.json');
+        if (!response.ok) throw new Error(`books.json returned ${response.status}`);
+        const manifest = await response.json();
+        allBooks = Array.isArray(manifest.books) ? manifest.books : [];
+        if (!allBooks.length) throw new Error('books.json lists no collections.');
+    } catch (error) {
+        console.error('Error loading collections:', error);
+        showError('Failed to load the collection list. Please try again later.');
+        return;
+    }
+
+    renderBookSwitcher();
+    await selectBook(getStoredBookId() || allBooks[0].id);
+}
+
+function getStoredBookId() {
+    try {
+        const stored = localStorage.getItem(SELECTED_BOOK_STORAGE);
+        return allBooks.some(book => book.id === stored) ? stored : '';
+    } catch {
+        return '';
+    }
+}
+
+function renderBookSwitcher() {
+    bookSwitcher.replaceChildren();
+    // A single collection needs no switcher.
+    bookSwitcher.hidden = allBooks.length < 2;
+    if (bookSwitcher.hidden) return;
+
+    allBooks.forEach(book => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'book-switch';
+        button.dataset.bookId = book.id;
+        button.textContent = book.name;
+        button.addEventListener('click', () => selectBook(book.id));
+        bookSwitcher.appendChild(button);
+    });
+}
+
+async function selectBook(bookId) {
+    const book = allBooks.find(item => item.id === bookId);
+    if (!book || book === currentBook) return;
+
+    currentBook = book;
+    try {
+        localStorage.setItem(SELECTED_BOOK_STORAGE, book.id);
+    } catch {
+        // A blocked storage quota should not prevent the switch.
+    }
+
+    closePoemModal();
+    searchInput.value = '';
+    clearSearch.style.display = 'none';
+    applyBookIdentity(book);
+
+    try {
+        const response = await fetch(book.poems);
+        if (!response.ok) throw new Error(`${book.poems} returned ${response.status}`);
         allPoems = await response.json();
-        filteredPoems = allPoems;
-        displayPoems(allPoems);
-        updateResultCount(allPoems.length, allPoems.length);
-        loadRecentlyVisited();
     } catch (error) {
         console.error('Error loading poems:', error);
         showError('Failed to load poems. Please try again later.');
+        return;
     }
+
+    filteredPoems = allPoems;
+    displayPoems(allPoems);
+    updateResultCount(allPoems.length, allPoems.length);
+    loadRecentlyVisited();
+}
+
+function applyBookIdentity(book) {
+    document.title = book.title;
+    bookTitle.textContent = book.title;
+    bookSubtitle.textContent = book.subtitle;
+    bookDescription.textContent = book.description;
+    bookSourceLink.href = book.sourceUrl;
+    bookSourceNote.textContent = book.sourceNote;
+    chatContext.textContent = book.chatContext;
+    searchInput.placeholder = `Search ${book.name} by title or content…`;
+    bookSwitcher.querySelectorAll('.book-switch').forEach(button => {
+        const selected = button.dataset.bookId === book.id;
+        button.classList.toggle('book-switch--active', selected);
+        button.setAttribute('aria-current', selected ? 'true' : 'false');
+    });
 }
 
 function getPoemId(poem) {
     return stableHash(`${poem.title}\n${poem.content}`);
 }
 
+// Recents are per collection; ids from one book never resolve in another.
+function getRecentPoemsKey() {
+    return `${RECENT_POEMS_STORAGE}:${currentBook.id}`;
+}
+
 function saveRecentlyVisited() {
     try {
-        localStorage.setItem(RECENT_POEMS_STORAGE, JSON.stringify(recentPoemIds));
+        localStorage.setItem(getRecentPoemsKey(), JSON.stringify(recentPoemIds));
     } catch (error) {
         console.warn('Could not save recently visited poems:', error);
     }
@@ -128,7 +218,7 @@ function saveRecentlyVisited() {
 
 function loadRecentlyVisited() {
     try {
-        const stored = JSON.parse(localStorage.getItem(RECENT_POEMS_STORAGE) || '[]');
+        const stored = JSON.parse(localStorage.getItem(getRecentPoemsKey()) || '[]');
         recentPoemIds = Array.isArray(stored)
             ? stored.filter(id => typeof id === 'string').slice(0, RECENT_POEMS_LIMIT)
             : [];
@@ -220,6 +310,10 @@ function getPreview(content) {
 
 // Clean poem content for display
 function cleanPoemContent(content, title = '') {
+    // These rules strip Grierson's textual apparatus. Editions without one are
+    // returned untouched: the year test alone would cut a poem at any date.
+    if (!currentBook || !currentBook.stripEditorialApparatus) return content.trim();
+
     const lines = content.split('\n');
     const cleanedLines = [];
     const normalizedTitle = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -404,8 +498,9 @@ function savePoemSession(poem, session) {
             model: session.model,
             context: {
                 poemTitle: poem.title,
-                author: AUTHOR_CONTEXT,
-                source: SOURCE_CONTEXT
+                book: currentBook.id,
+                author: currentBook.poet,
+                source: currentBook.sourceNote
             },
             messages: session.messages,
             images: session.images,
@@ -472,13 +567,13 @@ Answer in at most three or four sentences. Lead with the direct answer, keep quo
     return `You are a thoughtful literary conversation partner dedicated to the selected poem below.
 
 AUTHOR
-John Donne (1572–1631), an English poet and the pre-eminent representative of the metaphysical poets. His writing is known for intellectual argument, dramatic voice, wit, paradox, and extended metaphysical conceits.
+${currentBook.authorProfile}
 
 SOURCE
-The Poems of John Donne, edited by Herbert J. C. Grierson (Oxford: Clarendon Press, 1912), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/48688.
+${currentBook.sourceProfile}
 
 SELECTED POEM
-Title: ${poem.title}
+Title: ${poem.title}${poem.section ? `\nCluster: ${poem.section}` : ''}
 
 ${poemText}
 
@@ -498,7 +593,7 @@ function appendChatMessage(role, content, pending = false, options = {}) {
 
     const label = document.createElement('span');
     label.className = 'chat-message-label';
-    label.textContent = role === 'user' ? 'You' : 'Donne companion';
+    label.textContent = role === 'user' ? 'You' : currentBook.companionLabel;
 
     const body = document.createElement('div');
     body.className = 'chat-message-body';
@@ -516,7 +611,7 @@ function appendChatMessage(role, content, pending = false, options = {}) {
 function renderChatWelcome() {
     appendChatMessage(
         'assistant',
-        `I have the full text of “${currentPoem.title},” along with context about John Donne and the Grierson/Project Gutenberg source. What would you like to explore?`,
+        `I have the full text of “${currentPoem.title},” along with context about ${currentBook.poet} and the Project Gutenberg source. What would you like to explore?`,
         false,
         { listen: false }
     );
@@ -771,7 +866,7 @@ async function describePoemScene(poem) {
                             + 'Never quote or restate the poem, never use quotation marks, and never mention writing, reading, books, paper, letters, or the poem itself. '
                             + 'Reply with the description only.'
                     },
-                    { role: 'user', content: `A poem by John Donne titled ${poem.title}.\n\n${poemText}` }
+                    { role: 'user', content: `A poem by ${currentBook.poet} titled ${poem.title}.\n\n${poemText}` }
                 ],
                 temperature: 0.6,
                 max_tokens: 200,
@@ -897,7 +992,7 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
     ];
     const directions = [
         'Center the poem’s strongest symbolic image in an intimate, dramatic composition.',
-        'Interpret its central metaphysical conceit as a surprising visual relationship between human figures and the natural world.',
+        'Interpret its governing figure of speech as a surprising visual relationship between human figures and the natural world.',
         'Place the emotional argument in an atmospheric early-seventeenth-century English setting with historically plausible details.',
         'Create a more abstract, dreamlike interpretation using light, shadow, scale, and celestial imagery.',
         'Compose a wide, cinematic culmination that unites the poem’s major images without becoming a literal collage.'
@@ -909,7 +1004,7 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
         const direction = directions[variationIndex % directions.length];
         return {
             style: style.label,
-            prompt: `Wordless, text-free image ${index + 1} of ${count} interpreting a poem by John Donne. `
+            prompt: `Wordless, text-free image ${index + 1} of ${count} interpreting a poem by ${currentBook.poet}. `
                 + `${scene ? `Scene: ${scene} ` : ''}`
                 + `${direction} ${style.prompt} `
                 + `Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. `
@@ -1341,7 +1436,7 @@ async function requestGeminiTts(title, text, voice, kind = 'poem') {
     const response = await fetch('/api/tts', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ title, text, voice, kind })
+        body: JSON.stringify({ title, text, voice, kind, book: currentBook.id })
     });
     if (response.status === 401) {
         geminiKeySetup.hidden = false;
@@ -1705,5 +1800,5 @@ searchInput.addEventListener('input', () => {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     restoreBriefMode();
-    loadPoems();
+    loadBooks();
 });
