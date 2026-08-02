@@ -117,6 +117,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def end_headers(self) -> None:  # noqa: N802 - stdlib handler API
+        # Static files here change constantly. Without this browsers cache them
+        # heuristically and pair a new script with last week's stylesheet.
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def _serve_cached_audio(self) -> None:
         parts = unquote(self.path.split("?", 1)[0]).split("/")
         token = parts[4] if len(parts) > 4 else ""
