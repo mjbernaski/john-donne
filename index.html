@@ -46,6 +46,31 @@
             </div>
         </div>
 
+        <section id="pastePanel" class="paste-panel" aria-labelledby="pasteTitle" hidden>
+            <h2 id="pasteTitle" class="paste-title">Paste a poem</h2>
+            <p class="paste-note">Kept in this browser only. It is never uploaded anywhere except your own model, image, and narration servers.</p>
+            <form id="pasteForm" class="paste-form">
+                <div class="paste-row">
+                    <label class="paste-field">
+                        <span>Title</span>
+                        <input id="pasteTitleInput" type="text" maxlength="200" autocomplete="off" required>
+                    </label>
+                    <label class="paste-field">
+                        <span>Poet <em>(optional)</em></span>
+                        <input id="pasteAuthorInput" type="text" maxlength="120" autocomplete="off">
+                    </label>
+                </div>
+                <label class="paste-field">
+                    <span>Poem</span>
+                    <textarea id="pasteTextInput" rows="8" required placeholder="Paste the poem here, line breaks and all."></textarea>
+                </label>
+                <div class="paste-actions">
+                    <span id="pasteStatus" class="paste-status" role="status"></span>
+                    <button id="pasteSubmit" class="paste-submit" type="submit">Add to the shelf</button>
+                </div>
+            </form>
+        </section>
+
         <main class="main-content">
             <div id="poemsList" class="poems-grid">
                 <!-- Poems will be loaded here -->
@@ -170,7 +195,7 @@
         </div>
 
         <footer class="footer">
-            <p>
+            <p id="bookSourceCredit">
                 Source: <a id="bookSourceLink" href="https://www.gutenberg.org/files/48688/48688-h/48688-h.htm" target="_blank" rel="noopener">
                     Project Gutenberg
                 </a>
@@ -186,6 +211,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260802-9"></script>
+    <script src="app.js?v=20260802-10"></script>
 </body>
 </html>

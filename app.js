@@ -10,6 +10,7 @@ const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
 const SELECTED_BOOK_STORAGE = 'john-donne-selected-book';
 const IMAGE_STYLES_STORAGE = 'john-donne-image-styles';
 const IMAGE_STEER_STORAGE = 'john-donne-image-steer';
+const USER_POEMS_STORAGE = 'john-donne-user-poems';
 const VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
 let selectedStyleLabels = new Set();
 const RECENT_POEMS_LIMIT = 8;
@@ -36,9 +37,16 @@ const bookTitle = document.getElementById('bookTitle');
 const bookSubtitle = document.getElementById('bookSubtitle');
 const bookDescription = document.getElementById('bookDescription');
 const bookSourceLink = document.getElementById('bookSourceLink');
+const bookSourceCredit = document.getElementById('bookSourceCredit');
 const bookSourceNote = document.getElementById('bookSourceNote');
 const chatContext = document.getElementById('chatContext');
 const poemsList = document.getElementById('poemsList');
+const pastePanel = document.getElementById('pastePanel');
+const pasteForm = document.getElementById('pasteForm');
+const pasteTitleInput = document.getElementById('pasteTitleInput');
+const pasteAuthorInput = document.getElementById('pasteAuthorInput');
+const pasteTextInput = document.getElementById('pasteTextInput');
+const pasteStatus = document.getElementById('pasteStatus');
 const searchInput = document.getElementById('searchInput');
 const clearSearch = document.getElementById('clearSearch');
 const resultCount = document.getElementById('resultCount');
@@ -178,14 +186,18 @@ async function selectBook(bookId) {
     clearSearch.style.display = 'none';
     applyBookIdentity(book);
 
-    try {
-        const response = await fetch(book.poems);
-        if (!response.ok) throw new Error(`${book.poems} returned ${response.status}`);
-        allPoems = await response.json();
-    } catch (error) {
-        console.error('Error loading poems:', error);
-        showError('Failed to load poems. Please try again later.');
-        return;
+    if (book.userPoems) {
+        allPoems = loadUserPoems();
+    } else {
+        try {
+            const response = await fetch(book.poems);
+            if (!response.ok) throw new Error(`${book.poems} returned ${response.status}`);
+            allPoems = await response.json();
+        } catch (error) {
+            console.error('Error loading poems:', error);
+            showError('Failed to load poems. Please try again later.');
+            return;
+        }
     }
 
     filteredPoems = allPoems;
@@ -194,14 +206,105 @@ async function selectBook(bookId) {
     loadRecentlyVisited();
 }
 
+// Pasted poems live in this browser; they have no edition behind them.
+function loadUserPoems() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(USER_POEMS_STORAGE) || '[]');
+        if (!Array.isArray(stored)) return [];
+        return stored
+            .filter(poem => poem && typeof poem.title === 'string' && typeof poem.content === 'string')
+            .map(poem => ({
+                title: poem.title,
+                content: poem.content,
+                firstLine: poem.firstLine || poem.content.split('\n').find(line => line.trim()) || '',
+                ...(poem.author ? { author: poem.author } : {})
+            }));
+    } catch (error) {
+        console.warn('Could not read pasted poems:', error);
+        return [];
+    }
+}
+
+function saveUserPoems(poems) {
+    try {
+        localStorage.setItem(USER_POEMS_STORAGE, JSON.stringify(poems));
+        return true;
+    } catch (error) {
+        console.warn('Could not save pasted poems:', error);
+        return false;
+    }
+}
+
+function addUserPoem(event) {
+    event.preventDefault();
+    const title = pasteTitleInput.value.trim().replace(/\s+/g, ' ');
+    const author = pasteAuthorInput.value.trim().replace(/\s+/g, ' ');
+    // Keep the reader's line breaks; only normalise the line endings themselves.
+    const content = pasteTextInput.value.replace(/\r\n?/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
+
+    if (!title || !content) {
+        setPasteStatus('A title and the poem itself are both needed.', 'error');
+        return;
+    }
+
+    const poems = loadUserPoems();
+    if (poems.some(poem => poem.title === title && poem.content === content)) {
+        setPasteStatus('That poem is already on the shelf.', 'error');
+        return;
+    }
+
+    poems.push({
+        title,
+        content,
+        firstLine: content.split('\n').find(line => line.trim()) || '',
+        ...(author ? { author } : {})
+    });
+
+    if (!saveUserPoems(poems)) {
+        setPasteStatus('This browser would not store the poem.', 'error');
+        return;
+    }
+
+    pasteForm.reset();
+    setPasteStatus(`“${title}” added.`, 'done');
+    allPoems = poems;
+    filteredPoems = allPoems;
+    searchInput.value = '';
+    clearSearch.style.display = 'none';
+    displayPoems(allPoems);
+    updateResultCount(allPoems.length, allPoems.length);
+    pasteTitleInput.focus();
+}
+
+function removeUserPoem(poem) {
+    const remaining = loadUserPoems().filter(
+        stored => !(stored.title === poem.title && stored.content === poem.content)
+    );
+    saveUserPoems(remaining);
+    allPoems = remaining;
+    filteredPoems = allPoems;
+    displayPoems(allPoems);
+    updateResultCount(allPoems.length, allPoems.length);
+    renderRecentlyVisited();
+    setPasteStatus(`“${poem.title}” removed.`, 'done');
+}
+
+function setPasteStatus(message, state = '') {
+    pasteStatus.textContent = message;
+    pasteStatus.dataset.state = state;
+}
+
 function applyBookIdentity(book) {
     document.title = book.title;
     bookTitle.textContent = book.title;
     bookSubtitle.textContent = book.subtitle;
     bookDescription.textContent = book.description;
-    bookSourceLink.href = book.sourceUrl;
+    if (book.sourceUrl) bookSourceLink.href = book.sourceUrl;
     bookSourceNote.textContent = book.sourceNote;
     chatContext.textContent = book.chatContext;
+    pastePanel.hidden = !book.userPoems;
+    setPasteStatus('');
+    bookSourceCredit.hidden = !book.sourceUrl;
     searchInput.placeholder = `Search ${book.name} by title or content…`;
     bookSwitcher.querySelectorAll('.book-switch').forEach(button => {
         const selected = button.dataset.bookId === book.id;
@@ -284,11 +387,15 @@ function displayPoems(poems) {
         return;
     }
 
+    const removable = Boolean(currentBook && currentBook.userPoems);
+
     poemsList.innerHTML = poems.map((poem, index) => {
         const preview = getPreview(poem.content);
         return `
             <div class="poem-card" data-index="${index}">
+                ${removable ? '<button class="poem-remove" type="button" aria-label="Remove this poem">&times;</button>' : ''}
                 <h3 class="poem-title">${escapeHtml(poem.title)}</h3>
+                ${poem.author ? `<p class="poem-byline">${escapeHtml(poem.author)}</p>` : ''}
                 <p class="poem-preview">${escapeHtml(preview)}</p>
                 <span class="read-more">Read Full Poem →</span>
             </div>
@@ -301,6 +408,13 @@ function displayPoems(poems) {
             const index = parseInt(card.dataset.index);
             openPoemModal(filteredPoems[index]);
         });
+        const remove = card.querySelector('.poem-remove');
+        if (remove) {
+            remove.addEventListener('click', event => {
+                event.stopPropagation();   // the card itself opens the poem
+                removeUserPoem(filteredPoems[parseInt(card.dataset.index)]);
+            });
+        }
     });
 }
 
@@ -465,7 +579,10 @@ function buildDownloadName(poem, parts, extension) {
         .trim();
 
     const title = clean(poem.title).slice(0, 70).replace(/[.\s]+$/, '');
-    const segments = [clean(currentBook.poet), title, ...parts.map(clean)].filter(Boolean);
+    // A pasted poem with no named poet is titled by itself rather than by the
+    // book's stand-in phrase, which reads as prose in a filename.
+    const author = (poem && poem.author) || (currentBook.userPoems ? '' : currentBook.poet);
+    const segments = [clean(author), title, ...parts.map(clean)].filter(Boolean);
     return `${segments.join(' - ')}.${extension}`;
 }
 
@@ -619,7 +736,7 @@ SOURCE
 ${currentBook.sourceProfile}
 
 SELECTED POEM
-Title: ${poem.title}${poem.section ? `\nCluster: ${poem.section}` : ''}
+Title: ${poem.title}${poem.author ? `\nAttributed by the reader to: ${poem.author}` : ''}${poem.section ? `\nCluster: ${poem.section}` : ''}
 
 ${poemText}
 
@@ -912,7 +1029,7 @@ async function describePoemScene(poem) {
                             + 'Never quote or restate the poem, never use quotation marks, and never mention writing, reading, books, paper, letters, or the poem itself. '
                             + 'Reply with the description only.'
                     },
-                    { role: 'user', content: `A poem by ${currentBook.poet} titled ${poem.title}.\n\n${poemText}` }
+                    { role: 'user', content: `A poem by ${getPoemAuthor(poem)} titled ${poem.title}.\n\n${poemText}` }
                 ],
                 temperature: 0.6,
                 max_tokens: 200,
@@ -1036,6 +1153,10 @@ const VISUAL_STYLES = [
         prompt: 'Contemplative monochrome ink-wash painting with fluid tonal gradients, a few decisive brushstrokes, misty spatial depth, and radical, expressive emptiness.'
     }
 ];
+
+function getPoemAuthor(poem) {
+    return (poem && poem.author) || currentBook.poet;
+}
 
 function getSteerText() {
     return imageSteer.value.trim().replace(/\s+/g, ' ').slice(0, 200);
@@ -1161,7 +1282,7 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
             // The medium leads and is restated at the end: placed after the scene
             // description it was outweighed by it, and every style came out alike.
             prompt: `${style.prompt} The medium above governs the entire image. `
-                + `${scene ? `Subject: ${scene} ` : `Subject: a poem by ${currentBook.poet}. `}`
+                + `${scene ? `Subject: ${scene} ` : `Subject: a poem by ${getPoemAuthor(poem)}. `}`
                 + `${direction} `
                 // The reader's steer is stated last among the content directions
                 // and given precedence, so it can override the scene it follows.
@@ -1945,6 +2066,7 @@ chatBrief.addEventListener('change', saveChatToggles);
 chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
 imageSteer.addEventListener('change', saveSteerText);
+pasteForm.addEventListener('submit', addUserPoem);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
 imageApiKey.addEventListener('keydown', event => {

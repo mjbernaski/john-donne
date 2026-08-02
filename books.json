@@ -75,6 +75,25 @@
       "readingNotes": "Sensuous and controlled, with a dark elegance. Let Scott's rhyme and metre carry without singsong, hold the long sentences together, and keep irony dry rather than theatrical. Preserve the tension between beauty and disgust that the poems live on. Pronounce French names and titles correctly.",
       "readingScene": "A shuttered nineteenth-century room, close and slightly airless, with warm dampened acoustics.",
       "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience."
+    },
+    {
+      "id": "miscellaneous",
+      "name": "Miscellaneous",
+      "title": "Miscellaneous",
+      "subtitle": "Poems you paste in yourself",
+      "description": "A shelf for anything outside the other collections. Paste a poem and it gains the same companion, visual companions, and narration as the rest. These stay in this browser alone.",
+      "userPoems": true,
+      "companionLabel": "Poetry companion",
+      "chatContext": "Pasted by you · kept in this browser",
+      "sourceUrl": "",
+      "sourceNote": "Poems you pasted. They are held in this browser and sent only to your own model, image, and narration servers.",
+      "stripEditorialApparatus": false,
+      "poet": "an unnamed poet",
+      "authorProfile": "The poem below was supplied by the reader rather than drawn from an edition, so its author may be named in the entry or may be unknown. Attend to the text itself. Do not guess at authorship, date, or publication, and do not invent biographical or historical background; if the author is unknown, say so plainly and read the poem on its own terms.",
+      "sourceProfile": "Pasted by the reader and stored in their browser. There is no scholarly edition or editorial apparatus behind this text, so treat spelling, punctuation, and lineation as given, and do not attribute variants to an editor.",
+      "readingNotes": "Read attentively and let the poem set the register rather than imposing one. Follow the punctuation and lineation as given, breathe at line endings, and pause a little longer between stanzas.",
+      "readingScene": "A quiet room with close, warm acoustics.",
+      "readerProfile": "A seasoned reader of poetry performing an unfamiliar poem carefully and without mannerism."
     }
   ]
 }
