@@ -88,6 +88,11 @@ The chat proxy forwards its response body chunk by chunk, so streamed tokens
 still arrive as they are generated. Conversation history is kept separately for
 each poem and restored from browser storage after a reload.
 
+The **Be brief** toggle in the chat header asks for answers of three or four
+sentences and lowers the reply token ceiling. It applies from the next message
+onward, including in conversations already underway, and the setting persists
+across reloads.
+
 Image generation requires the FLUX access key. Enter it once in the Visual
 Companions panel; it is saved only in browser storage. Alternatively, provide
 the key to the local server process without exposing it to browser JavaScript:
@@ -98,6 +103,14 @@ FLUX_API_KEY=your-key python3 server.py
 
 The server also reads `FLUX_API_KEY` and `GEMINI_API_KEY` from a local `.env`
 file. That file is ignored by Git.
+
+Images are meant to carry no text. Sending the poem's own lines to FLUX made it
+render them onto pages and banners, so each poem is first distilled by the model
+server into a short visual scene description, and only that description reaches
+the image server. If the model server is unreachable, generation still proceeds
+from the style and composition direction alone — the poem's words are never sent
+to FLUX. (`negative_prompt` is left `null`: this FLUX build rejects it unless
+started with `--sdxl`.)
 
 Short poems receive one image, with progressively longer poems receiving up to
 five distinct visual interpretations. Conversation history and generated-image

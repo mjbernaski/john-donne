@@ -114,7 +114,14 @@
                             <p class="chat-context">John Donne · Grierson edition · Project Gutenberg</p>
                             <div class="chat-status-row">
                                 <span id="chatStatus" class="chat-status" data-state="connecting">Connecting to model…</span>
-                                <button id="clearChat" class="chat-clear" type="button">New conversation</button>
+                                <div class="chat-controls">
+                                    <label class="chat-toggle" for="chatBrief" title="Ask for shorter, more direct answers">
+                                        <input id="chatBrief" class="chat-toggle-input" type="checkbox">
+                                        <span class="chat-toggle-track" aria-hidden="true"></span>
+                                        <span class="chat-toggle-text">Be brief</span>
+                                    </label>
+                                    <button id="clearChat" class="chat-clear" type="button">New conversation</button>
+                                </div>
                             </div>
                         </header>
 
@@ -155,6 +162,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260802-1"></script>
+    <script src="app.js?v=20260802-2"></script>
 </body>
 </html>

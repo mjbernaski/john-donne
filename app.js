@@ -10,6 +10,8 @@ const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
 const RECENT_POEMS_LIMIT = 8;
 const IMAGE_API_KEY_STORAGE = 'john-donne-flux-api-key';
 const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
+const BRIEF_MODE_STORAGE = 'john-donne-chat-brief';
+const poemSceneCache = new Map();
 const AUDIO_DB_NAME = 'john-donne-media-v1';
 const AUDIO_STORE_NAME = 'audio';
 const AUTHOR_CONTEXT = 'John Donne (1572–1631), English metaphysical poet';
@@ -40,6 +42,7 @@ const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
 const clearChat = document.getElementById('clearChat');
+const chatBrief = document.getElementById('chatBrief');
 const generateImages = document.getElementById('generateImages');
 const imageKeySetup = document.getElementById('imageKeySetup');
 const imageApiKey = document.getElementById('imageApiKey');
@@ -437,9 +440,34 @@ function getPoemChatSession(poem) {
     return poemChatSessions.get(poem);
 }
 
+function isBriefMode() {
+    return chatBrief.checked;
+}
+
+function restoreBriefMode() {
+    try {
+        chatBrief.checked = localStorage.getItem(BRIEF_MODE_STORAGE) === 'true';
+    } catch {
+        chatBrief.checked = false;
+    }
+}
+
+function saveBriefMode() {
+    try {
+        localStorage.setItem(BRIEF_MODE_STORAGE, String(chatBrief.checked));
+    } catch {
+        // A blocked storage quota should not disable the toggle itself.
+    }
+}
+
 function buildPoemSystemPrompt(poem) {
     const poemText = cleanPoemContent(poem.content, poem.title)
         .replace(/\n{2,}/g, newlines => (newlines.length === 2 ? '\n' : '\n\n'));
+
+    const lengthInstruction = isBriefMode()
+        ? `\n\nBREVITY
+Answer in at most three or four sentences. Lead with the direct answer, keep quotations to a few words, and omit preamble, restatement of the question, and closing offers of further help. Depth matters more than coverage: make one point well rather than surveying every reading. Expand only if the reader explicitly asks for more.`
+        : '';
 
     return `You are a thoughtful literary conversation partner dedicated to the selected poem below.
 
@@ -455,7 +483,7 @@ Title: ${poem.title}
 ${poemText}
 
 INSTRUCTIONS
-Discuss this specific poem with the reader. Ground close readings in the supplied text and quote briefly when useful. Explain archaic language and historical or literary context clearly. Distinguish established facts from interpretation, and say when something is uncertain. Do not invent lines, biographical details, or source claims. Keep answers conversational and responsive to the reader's level of detail.`;
+Discuss this specific poem with the reader. Ground close readings in the supplied text and quote briefly when useful. Explain archaic language and historical or literary context clearly. Distinguish established facts from interpretation, and say when something is uncertain. Do not invent lines, biographical details, or source claims. Keep answers conversational and responsive to the reader's level of detail.${lengthInstruction}`;
 }
 
 function setChatStatus(message, state = 'ready') {
@@ -645,7 +673,7 @@ async function sendChatMessage(event) {
                     ...session.messages
                 ],
                 temperature: 0.7,
-                max_tokens: 1200,
+                max_tokens: isBriefMode() ? 320 : 1200,
                 stream: true,
                 user: session.id
             })
@@ -717,11 +745,58 @@ function getPoemImageCount(poem) {
     return 5;
 }
 
-function getImagePrompts(poem, count, variationOffset = 0) {
-    const excerpt = cleanPoemContent(poem.content, poem.title)
+// The image model renders any poem text it is shown, so the poem is distilled
+// into a purely visual scene before it reaches FLUX.
+async function describePoemScene(poem) {
+    const cached = poemSceneCache.get(poem.title);
+    if (cached) return cached;
+
+    const poemText = cleanPoemContent(poem.content, poem.title)
         .replace(/^\s*\d+(?=[\p{L}'‘’“"(&])/gmu, '')
         .replace(/\s+/g, ' ')
         .slice(0, 1400);
+
+    const pending = (async () => {
+        const model = await resolveModel({});
+        const response = await fetch(`${CHAT_PROXY_URL}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You turn poems into concrete visual scene descriptions for an image generator. '
+                            + 'Reply with 40 to 70 words of purely visual description: setting, figures, objects, light, weather, and mood. '
+                            + 'Never quote or restate the poem, never use quotation marks, and never mention writing, reading, books, paper, letters, or the poem itself. '
+                            + 'Reply with the description only.'
+                    },
+                    { role: 'user', content: `A poem by John Donne titled ${poem.title}.\n\n${poemText}` }
+                ],
+                temperature: 0.6,
+                max_tokens: 200,
+                stream: false
+            })
+        });
+        if (!response.ok) throw new Error(await getApiError(response));
+        const payload = await response.json();
+        const scene = (payload.choices?.[0]?.message?.content || '')
+            .replace(/["“”]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!scene) throw new Error('The model returned no scene description.');
+        return scene;
+    })().catch(error => {
+        console.warn('Scene description unavailable; using style direction alone:', error);
+        poemSceneCache.delete(poem.title);
+        return '';
+    });
+
+    poemSceneCache.set(poem.title, pending);
+    return pending;
+}
+
+function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
     const visualStyles = [
         {
             label: 'Fine-art photograph',
@@ -834,9 +909,12 @@ function getImagePrompts(poem, count, variationOffset = 0) {
         const direction = directions[variationIndex % directions.length];
         return {
             style: style.label,
-            prompt: `Create visual companion ${index + 1} of ${count} for John Donne's poem “${poem.title}.” ${direction} `
-                + `${style.prompt} Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. No nudity, explicit sexual activity, pornographic imagery, graphic violence, lettering, captions, or visible poem text. `
-                + `Use this poem excerpt as the sole literary inspiration: ${excerpt}`
+            prompt: `Wordless, text-free image ${index + 1} of ${count} interpreting a poem by John Donne. `
+                + `${scene ? `Scene: ${scene} ` : ''}`
+                + `${direction} ${style.prompt} `
+                + `Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. `
+                + `No nudity, explicit sexual activity, pornographic imagery, or graphic violence. `
+                + `Purely pictorial: no lettering, captions, signatures, or written words anywhere.`
         };
     });
 }
@@ -969,7 +1047,7 @@ async function submitFluxImage(prompt) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             prompt,
-            negative_prompt: null,
+            negative_prompt: null,  // Rejected unless the FLUX server runs the SDXL backend.
             orientation: 'landscape',
             size: '1mp',
             steps: 25,
@@ -1117,7 +1195,11 @@ async function generatePoemImageSet() {
         return;
     }
 
-    const prompts = getImagePrompts(poem, getPoemImageCount(poem), session.images.length);
+    setPoemImagesStatus('Reading the poem for its imagery…', 'working');
+    const scene = await describePoemScene(poem);
+    if (currentPoem !== poem || currentChatSession !== session) return;
+
+    const prompts = getImagePrompts(poem, getPoemImageCount(poem), session.images.length, scene);
     const newImages = prompts.map(({ prompt, style }) => ({ prompt, style, status: 'queued', jobId: null, filename: null }));
     session.images.push(...newImages);
     session.imagesLoading = true;
@@ -1563,6 +1645,7 @@ randomPoem.addEventListener('click', openRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
 chatForm.addEventListener('submit', sendChatMessage);
 clearChat.addEventListener('click', clearCurrentChat);
+chatBrief.addEventListener('change', saveBriefMode);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
 imageApiKey.addEventListener('keydown', event => {
@@ -1621,5 +1704,6 @@ searchInput.addEventListener('input', () => {
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+    restoreBriefMode();
     loadPoems();
 });
