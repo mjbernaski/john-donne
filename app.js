@@ -9,6 +9,7 @@ const CHAT_STORAGE_PREFIX = 'john-donne-poem-session-v1:';
 const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
 const SELECTED_BOOK_STORAGE = 'john-donne-selected-book';
 const IMAGE_STYLES_STORAGE = 'john-donne-image-styles';
+const IMAGE_STEER_STORAGE = 'john-donne-image-steer';
 const VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
 let selectedStyleLabels = new Set();
 const RECENT_POEMS_LIMIT = 8;
@@ -60,6 +61,7 @@ const generateImages = document.getElementById('generateImages');
 const imageKeySetup = document.getElementById('imageKeySetup');
 const imageApiKey = document.getElementById('imageApiKey');
 const saveImageApiKey = document.getElementById('saveImageApiKey');
+const imageSteer = document.getElementById('imageSteer');
 const imageStyleOptions = document.getElementById('imageStyleOptions');
 const imageStylesSummary = document.getElementById('imageStylesSummary');
 const clearImageStyles = document.getElementById('clearImageStyles');
@@ -1035,6 +1037,26 @@ const VISUAL_STYLES = [
     }
 ];
 
+function getSteerText() {
+    return imageSteer.value.trim().replace(/\s+/g, ' ').slice(0, 200);
+}
+
+function restoreSteerText() {
+    try {
+        imageSteer.value = localStorage.getItem(IMAGE_STEER_STORAGE) || '';
+    } catch {
+        imageSteer.value = '';
+    }
+}
+
+function saveSteerText() {
+    try {
+        localStorage.setItem(IMAGE_STEER_STORAGE, getSteerText());
+    } catch {
+        // A blocked storage quota should not disable the field.
+    }
+}
+
 // An empty selection means every style, cycled in order across a poem's images.
 function getSelectedStyles() {
     const chosen = VISUAL_STYLES.filter(style => selectedStyleLabels.has(style.label));
@@ -1128,6 +1150,7 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
     ];
 
     const styles = getSelectedStyles();
+    const steer = getSteerText();
 
     return Array.from({ length: count }, (_, index) => {
         const variationIndex = variationOffset + index;
@@ -1140,6 +1163,9 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
             prompt: `${style.prompt} The medium above governs the entire image. `
                 + `${scene ? `Subject: ${scene} ` : `Subject: a poem by ${currentBook.poet}. `}`
                 + `${direction} `
+                // The reader's steer is stated last among the content directions
+                // and given precedence, so it can override the scene it follows.
+                + `${steer ? `The reader asks specifically for: ${steer}. Follow that even where it departs from the subject above. ` : ''}`
                 + `Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. `
                 + `No nudity, explicit sexual activity, pornographic imagery, or graphic violence. `
                 + `Purely pictorial: no lettering, captions, signatures, or written words anywhere. `
@@ -1918,6 +1944,7 @@ clearChat.addEventListener('click', clearCurrentChat);
 chatBrief.addEventListener('change', saveChatToggles);
 chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
+imageSteer.addEventListener('change', saveSteerText);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
 imageApiKey.addEventListener('keydown', event => {
@@ -1978,6 +2005,7 @@ searchInput.addEventListener('input', () => {
 document.addEventListener('DOMContentLoaded', () => {
     restoreChatToggles();
     restoreSelectedStyles();
+    restoreSteerText();
     renderStylePicker();
     loadBooks();
 });

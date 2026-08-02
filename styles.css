@@ -696,6 +696,30 @@ body {
     font-weight: 700;
 }
 
+.image-steer {
+    width: 100%;
+    margin-top: 9px;
+    padding: 8px 10px;
+    border: 1px solid #c9bbaa;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--text-color);
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+}
+
+.image-steer::placeholder {
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.image-steer:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.1);
+}
+
 .image-styles-summary {
     margin-top: 8px;
     color: var(--text-light);
