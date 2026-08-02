@@ -196,7 +196,8 @@ async function selectBook(bookId) {
     applyBookIdentity(book);
 
     if (book.userPoems) {
-        allPoems = loadUserPoems();
+        await migrateLocalPoems();
+        allPoems = await loadUserPoems();
     } else {
         try {
             const response = await fetch(book.poems);
@@ -216,37 +217,64 @@ async function selectBook(bookId) {
     loadRecentlyVisited();
 }
 
-// Pasted poems live in this browser; they have no edition behind them.
-function loadUserPoems() {
+// The Miscellaneous shelf lives on the server so every browser and reader of
+// this site sees the same poems.
+async function loadUserPoems() {
     try {
-        const stored = JSON.parse(localStorage.getItem(USER_POEMS_STORAGE) || '[]');
-        if (!Array.isArray(stored)) return [];
-        return stored
-            .filter(poem => poem && typeof poem.title === 'string' && typeof poem.content === 'string')
-            .map(poem => ({
-                title: poem.title,
-                content: poem.content,
-                firstLine: poem.firstLine || poem.content.split('\n').find(line => line.trim()) || '',
-                ...(poem.author ? { author: poem.author } : {}),
-                ...(poem.translator ? { translator: poem.translator } : {})
-            }));
+        const response = await fetch('/api/poems');
+        if (!response.ok) throw new Error(`/api/poems returned ${response.status}`);
+        const payload = await response.json();
+        return Array.isArray(payload.poems) ? payload.poems : [];
     } catch (error) {
-        console.warn('Could not read pasted poems:', error);
+        console.warn('Could not read the shared shelf:', error);
+        setPasteStatus('The shared shelf could not be reached.', 'error');
         return [];
     }
 }
 
-function saveUserPoems(poems) {
-    try {
-        localStorage.setItem(USER_POEMS_STORAGE, JSON.stringify(poems));
-        return true;
-    } catch (error) {
-        console.warn('Could not save pasted poems:', error);
-        return false;
-    }
+async function sendPoem(method, path, body) {
+    const response = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined
+    });
+    if (!response.ok) throw new Error(await getApiError(response));
+    return response.status === 204 ? {} : response.json();
 }
 
-function submitUserPoem(event) {
+// Anything pasted before the shelf moved to the server is uploaded once, then
+// the browser copy is dropped so it cannot be re-uploaded elsewhere.
+async function migrateLocalPoems() {
+    let local = [];
+    try {
+        local = JSON.parse(localStorage.getItem(USER_POEMS_STORAGE) || '[]');
+    } catch {
+        local = [];
+    }
+    if (!Array.isArray(local) || !local.length) return false;
+
+    let moved = 0;
+    for (const poem of local) {
+        if (!poem || !poem.title || !poem.content) continue;
+        try {
+            await sendPoem('POST', '/api/poems', poem);
+            moved += 1;
+        } catch (error) {
+            if (!/already on the shelf/i.test(error.message)) {
+                console.warn('Could not move a pasted poem to the shared shelf:', error);
+            }
+        }
+    }
+    try {
+        localStorage.removeItem(USER_POEMS_STORAGE);
+    } catch {
+        // Nothing to do; the duplicate check on the server covers a repeat.
+    }
+    if (moved) setPasteStatus(`${moved} poem${moved === 1 ? '' : 's'} moved to the shared shelf.`, 'done');
+    return moved > 0;
+}
+
+async function submitUserPoem(event) {
     event.preventDefault();
     const title = pasteTitleInput.value.trim().replace(/\s+/g, ' ');
     const author = pasteAuthorInput.value.trim().replace(/\s+/g, ' ');
@@ -259,49 +287,30 @@ function submitUserPoem(event) {
         return;
     }
 
-    const poems = loadUserPoems();
-    const existing = editingPoem
-        ? poems.findIndex(poem => poem.title === editingPoem.title && poem.content === editingPoem.content)
-        : -1;
-    if (editingPoem && existing === -1) {
-        setPasteStatus('That poem is no longer on the shelf.', 'error');
-        stopEditingUserPoem();
+    const wasEditing = Boolean(editingPoem);
+    const payload = { title, content, author, translator };
+
+    pasteSubmit.disabled = true;
+    try {
+        if (wasEditing) {
+            const previous = editingPoem;
+            const { poem } = await sendPoem('PUT', `/api/poems/${encodeURIComponent(previous.id)}`, payload);
+            // The chat session is keyed by title and text, so an edit would
+            // orphan the conversation unless it is carried to the new key.
+            carryPoemHistory(previous, poem);
+        } else {
+            await sendPoem('POST', '/api/poems', payload);
+        }
+    } catch (error) {
+        setPasteStatus(error.message, 'error');
         return;
+    } finally {
+        pasteSubmit.disabled = false;
     }
 
-    const clashes = poems.some((poem, index) =>
-        index !== existing && poem.title === title && poem.content === content);
-    if (clashes) {
-        setPasteStatus('That poem is already on the shelf.', 'error');
-        return;
-    }
-
-    const updated = {
-        title,
-        content,
-        firstLine: content.split('\n').find(line => line.trim()) || '',
-        ...(author ? { author } : {}),
-        ...(translator ? { translator } : {})
-    };
-
-    if (existing === -1) {
-        poems.push(updated);
-    } else {
-        // The chat session is keyed by title and text, so an edit would orphan
-        // the conversation unless it is carried over to the new key.
-        carryPoemHistory(poems[existing], updated);
-        poems[existing] = updated;
-    }
-
-    if (!saveUserPoems(poems)) {
-        setPasteStatus('This browser would not store the poem.', 'error');
-        return;
-    }
-
-    const wasEditing = existing !== -1;
     stopEditingUserPoem();
     setPasteStatus(`“${title}” ${wasEditing ? 'updated' : 'added'}.`, 'done');
-    allPoems = poems;
+    allPoems = await loadUserPoems();
     filteredPoems = allPoems;
     searchInput.value = '';
     clearSearch.style.display = 'none';
@@ -365,15 +374,17 @@ function carryPoemHistory(oldPoem, newPoem) {
     }
 }
 
-function removeUserPoem(poem) {
+async function removeUserPoem(poem) {
     if (editingPoem && editingPoem.title === poem.title && editingPoem.content === poem.content) {
         stopEditingUserPoem();
     }
-    const remaining = loadUserPoems().filter(
-        stored => !(stored.title === poem.title && stored.content === poem.content)
-    );
-    saveUserPoems(remaining);
-    allPoems = remaining;
+    try {
+        await sendPoem('DELETE', `/api/poems/${encodeURIComponent(poem.id)}`);
+    } catch (error) {
+        setPasteStatus(error.message, 'error');
+        return;
+    }
+    allPoems = await loadUserPoems();
     filteredPoems = allPoems;
     displayPoems(allPoems);
     updateResultCount(allPoems.length, allPoems.length);
@@ -485,7 +496,7 @@ async function readPastedText() {
 
 // Pasted poems exist only in this browser, so they are worth being able to keep.
 function exportUserPoems() {
-    const poems = loadUserPoems();
+    const poems = allPoems;
     if (!poems.length) return;
 
     const stamp = new Date().toISOString().slice(0, 10);

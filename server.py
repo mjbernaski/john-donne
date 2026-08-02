@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
 import wave
 from collections import OrderedDict
@@ -78,6 +79,27 @@ CHAT_TIMEOUT = 300
 AUDIO_CACHE: "OrderedDict[str, tuple[str, bytes]]" = OrderedDict()
 AUDIO_CACHE_LIMIT = 8
 SAFE_FILENAME = re.compile(r"[^A-Za-z0-9 ,._'()\[\]-]+")
+# The Miscellaneous shelf lives here rather than in one browser, so every reader
+# of this server sees the same poems.
+USER_POEMS_PATH = BASE_DIR / "user-poems.json"
+USER_POEMS_LOCK = threading.Lock()
+
+
+def read_user_poems() -> list[dict]:
+    try:
+        stored = json.loads(USER_POEMS_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError:
+        return []
+    return stored if isinstance(stored, list) else []
+
+
+def write_user_poems(poems: list[dict]) -> None:
+    """Write through a temporary file so a crash cannot truncate the shelf."""
+    temporary = USER_POEMS_PATH.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(poems, indent=2, ensure_ascii=False), encoding="utf-8")
+    temporary.replace(USER_POEMS_PATH)
 
 
 def cache_audio(filename: str, audio: bytes) -> str:
@@ -115,7 +137,96 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/tts/audio/"):
             self._serve_cached_audio()
             return
+        if self.path == "/api/poems":
+            self._list_user_poems()
+            return
         super().do_GET()
+
+    def do_PUT(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path.startswith("/api/poems/"):
+            self._update_user_poem(self.path.removeprefix("/api/poems/"))
+            return
+        self.send_error(405, "PUT is only supported for the shared shelf")
+
+    def do_DELETE(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path.startswith("/api/poems/"):
+            self._delete_user_poem(self.path.removeprefix("/api/poems/"))
+            return
+        self.send_error(405, "DELETE is only supported for the shared shelf")
+
+    def _read_json_body(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        return json.loads(self.rfile.read(length) or b"{}")
+
+    @staticmethod
+    def _clean_poem(payload: dict) -> dict:
+        """Keep the reader's line breaks, drop anything else unexpected."""
+        title = re.sub(r"\s+", " ", str(payload.get("title", ""))).strip()[:200]
+        content = str(payload.get("content", "")).replace("\r\n", "\n").replace("\r", "\n")
+        content = re.sub(r"\n{4,}", "\n\n\n", content).strip()[:200_000]
+        if not title or not content:
+            raise ValueError("A title and the poem itself are both required.")
+
+        poem = {"title": title, "content": content,
+                "firstLine": next((line for line in content.split("\n") if line.strip()), "")[:100]}
+        for field in ("author", "translator"):
+            value = re.sub(r"\s+", " ", str(payload.get(field, ""))).strip()[:120]
+            if value:
+                poem[field] = value
+        return poem
+
+    def _list_user_poems(self) -> None:
+        self._send_json(200, {"poems": read_user_poems()})
+
+    def _add_user_poem(self) -> None:
+        try:
+            poem = self._clean_poem(self._read_json_body())
+        except (ValueError, json.JSONDecodeError) as error:
+            self._send_json(400, {"error": str(error)})
+            return
+
+        with USER_POEMS_LOCK:
+            poems = read_user_poems()
+            if any(item["title"] == poem["title"] and item["content"] == poem["content"]
+                   for item in poems):
+                self._send_json(409, {"error": "That poem is already on the shelf."})
+                return
+            poem["id"] = secrets.token_urlsafe(8)
+            poems.append(poem)
+            write_user_poems(poems)
+        self._send_json(201, {"poem": poem})
+
+    def _update_user_poem(self, poem_id: str) -> None:
+        try:
+            update = self._clean_poem(self._read_json_body())
+        except (ValueError, json.JSONDecodeError) as error:
+            self._send_json(400, {"error": str(error)})
+            return
+
+        with USER_POEMS_LOCK:
+            poems = read_user_poems()
+            position = next((i for i, item in enumerate(poems) if item.get("id") == poem_id), -1)
+            if position == -1:
+                self._send_json(404, {"error": "That poem is no longer on the shelf."})
+                return
+            if any(i != position and item["title"] == update["title"]
+                   and item["content"] == update["content"] for i, item in enumerate(poems)):
+                self._send_json(409, {"error": "That poem is already on the shelf."})
+                return
+            update["id"] = poem_id
+            poems[position] = update
+            write_user_poems(poems)
+        self._send_json(200, {"poem": update})
+
+    def _delete_user_poem(self, poem_id: str) -> None:
+        with USER_POEMS_LOCK:
+            poems = read_user_poems()
+            remaining = [item for item in poems if item.get("id") != poem_id]
+            if len(remaining) == len(poems):
+                self._send_json(404, {"error": "That poem is no longer on the shelf."})
+                return
+            write_user_poems(remaining)
+        self._send_json(200, {"removed": poem_id})
 
     def end_headers(self) -> None:  # noqa: N802 - stdlib handler API
         # Static files here change constantly. Without this browsers cache them
@@ -162,6 +273,9 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/api/tts":
             self._generate_tts()
+            return
+        if self.path == "/api/poems":
+            self._add_user_poem()
             return
         if self.path.startswith("/api/flux/"):
             upstream_path = self.path.removeprefix("/api/flux")
