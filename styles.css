@@ -696,16 +696,32 @@ body {
     font-weight: 700;
 }
 
+.image-steer-label {
+    display: block;
+    margin-top: 13px;
+    margin-bottom: 6px;
+    color: var(--secondary-color);
+    font-family: var(--font-sans);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
 .image-steer {
+    display: block;
     width: 100%;
-    margin-top: 9px;
-    padding: 8px 10px;
+    /* Wide enough to read a full phrase back, not just the first few words. */
+    min-height: 62px;
+    padding: 10px 12px;
     border: 1px solid #c9bbaa;
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.76);
     color: var(--text-color);
     font-family: var(--font-sans);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    resize: vertical;
 }
 
 .image-steer::placeholder {
