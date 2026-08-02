@@ -1135,12 +1135,15 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
         const direction = directions[variationIndex % directions.length];
         return {
             style: style.label,
-            prompt: `Wordless, text-free image ${index + 1} of ${count} interpreting a poem by ${currentBook.poet}. `
-                + `${scene ? `Scene: ${scene} ` : ''}`
-                + `${direction} ${style.prompt} `
+            // The medium leads and is restated at the end: placed after the scene
+            // description it was outweighed by it, and every style came out alike.
+            prompt: `${style.prompt} The medium above governs the entire image. `
+                + `${scene ? `Subject: ${scene} ` : `Subject: a poem by ${currentBook.poet}. `}`
+                + `${direction} `
                 + `Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. `
                 + `No nudity, explicit sexual activity, pornographic imagery, or graphic violence. `
-                + `Purely pictorial: no lettering, captions, signatures, or written words anywhere.`
+                + `Purely pictorial: no lettering, captions, signatures, or written words anywhere. `
+                + `Render every part of it as ${style.label}, not as a generic digital illustration or photograph.`
         };
     });
 }
