@@ -24,6 +24,7 @@ SUBTITLE_PATTERN = re.compile(r'<p[^>]*>(.*?)</p>', re.S)
 BODY_PATTERN = re.compile(r'<pre[^>]*>(.*?)</pre>', re.S)
 BOOK_PATTERN = re.compile(r'^BOOK\s*[IVXLC]+\.?\s*(.*)$')
 SKIP_TITLES = {'contents', 'by walt whitman'}
+SECTION_NUMBER = re.compile(r'\s*\d+\s*')
 
 
 def strip_tags(markup):
@@ -35,6 +36,25 @@ def dedent_verse(lines):
     indents = [len(line) - len(line.lstrip(' ')) for line in lines if line.strip()]
     margin = min(indents) if indents else 0
     return [line[margin:].rstrip() if line.strip() else '' for line in lines]
+
+
+def join_wrapped(lines):
+    """The source hard-wraps at about seventy columns and indents the run-over.
+    Those belong to the line above: Whitman's long line is the whole point, and
+    leaving them split turns one line of verse into two."""
+    joined = []
+    for line in lines:
+        is_runover = (
+            line.startswith(' ')
+            and line.strip()
+            and joined and joined[-1].strip()
+            and not SECTION_NUMBER.fullmatch(line)
+        )
+        if is_runover:
+            joined[-1] = f'{joined[-1].rstrip()} {line.strip()}'
+        else:
+            joined.append(line)
+    return joined
 
 
 def parse_poems(input_file):
@@ -70,7 +90,7 @@ def parse_poems(input_file):
         if not title:
             continue
 
-        lines = dedent_verse(html.unescape('\n\n'.join(bodies)).split('\n'))
+        lines = join_wrapped(dedent_verse(html.unescape('\n\n'.join(bodies)).split('\n')))
         while lines and not lines[0]:
             lines.pop(0)
         while lines and not lines[-1]:
