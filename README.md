@@ -284,6 +284,18 @@ the same. Leading with the medium, saying that it governs the whole image, and
 closing with an instruction to render every part of it in that medium is what
 makes the chosen styles actually differ from one another.
 
+Each finished image carries a **Discuss** control beside its Download link,
+which attaches it to the next chat message. The companion is a vision model, so
+it can be asked whether an image answers the poem. The attachment shows as a
+tray above the composer until it is sent or removed, and it appears as a
+thumbnail in the conversation afterwards.
+
+Attachments are downscaled to a longest edge of 768 pixels and re-encoded as
+JPEG before they are sent. A full render is around 2 MB, which is far more than
+the model needs and would exhaust the browser's storage quota within a few
+messages; downscaled, an image costs roughly 230 KB of base64 and about 350
+prompt tokens.
+
 Short poems receive one image, with progressively longer poems receiving up to
 five distinct visual interpretations. Conversation history and generated-image
 records are stored separately for each poem in browser storage.

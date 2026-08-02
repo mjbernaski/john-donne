@@ -64,6 +64,7 @@ const closeModal = document.getElementById('closeModal');
 const chatStatus = document.getElementById('chatStatus');
 const chatMessages = document.getElementById('chatMessages');
 const chatForm = document.getElementById('chatForm');
+const chatAttachment = document.getElementById('chatAttachment');
 const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
 const clearChat = document.getElementById('clearChat');
@@ -371,6 +372,63 @@ function removeUserPoem(poem) {
     updateExportButton();
     renderRecentlyVisited();
     setPasteStatus(`“${poem.title}” removed.`, 'done');
+}
+
+// Full-size renders are far larger than the model needs and would fill the
+// browser's storage quota, so an attachment is downscaled before it is sent.
+async function toAttachment(objectUrl, maxEdge = 768) {
+    const blob = await (await fetch(objectUrl)).blob();
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvas.toDataURL('image/jpeg', 0.78);
+}
+
+async function attachImageToChat(image, session) {
+    const objectUrl = session.imageObjectUrls.get(image.filename);
+    if (!objectUrl) return;
+    try {
+        session.pendingAttachment = {
+            dataUrl: await toAttachment(objectUrl),
+            label: image.style ? `${image.style} interpretation` : 'Generated image'
+        };
+        renderChatAttachment(session);
+        chatInput.focus();
+    } catch (error) {
+        console.error('Could not attach the image:', error);
+        setChatStatus('That image could not be attached.', 'error');
+    }
+}
+
+function renderChatAttachment(session) {
+    chatAttachment.replaceChildren();
+    const pending = session && session.pendingAttachment;
+    chatAttachment.hidden = !pending;
+    if (!pending) return;
+
+    const thumb = document.createElement('img');
+    thumb.className = 'chat-attachment-thumb';
+    thumb.src = pending.dataUrl;
+    thumb.alt = '';
+
+    const label = document.createElement('span');
+    label.className = 'chat-attachment-label';
+    label.textContent = `${pending.label} attached`;
+
+    const drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'chat-attachment-drop';
+    drop.textContent = 'Remove';
+    drop.addEventListener('click', () => {
+        session.pendingAttachment = null;
+        renderChatAttachment(session);
+    });
+
+    chatAttachment.append(thumb, label, drop);
 }
 
 function setPasteStatus(message, state = '') {
@@ -869,6 +927,21 @@ function setChatStatus(message, state = 'ready') {
     chatStatus.dataset.state = state;
 }
 
+// A message is a plain string until an image is attached, when it becomes the
+// OpenAI content-parts array. Both shapes have to render and read back.
+function messageText(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content.filter(part => part.type === 'text').map(part => part.text).join('\n');
+}
+
+function messageImages(content) {
+    if (!Array.isArray(content)) return [];
+    return content
+        .filter(part => part.type === 'image_url' && part.image_url && part.image_url.url)
+        .map(part => part.image_url.url);
+}
+
 function appendChatMessage(role, content, pending = false, options = {}) {
     const message = document.createElement('article');
     message.className = `chat-message chat-message--${role}`;
@@ -880,11 +953,21 @@ function appendChatMessage(role, content, pending = false, options = {}) {
 
     const body = document.createElement('div');
     body.className = 'chat-message-body';
-    body.textContent = content;
+    body.textContent = messageText(content);
 
     message.append(label, body);
+
+    messageImages(content).forEach(url => {
+        const thumb = document.createElement('img');
+        thumb.className = 'chat-message-image';
+        thumb.src = url;
+        thumb.alt = 'Image shared with the companion';
+        thumb.loading = 'lazy';
+        message.appendChild(thumb);
+    });
+
     if (role === 'assistant' && !pending && options.listen !== false) {
-        addChatListenControl(message, content, options.session || currentChatSession);
+        addChatListenControl(message, messageText(content), options.session || currentChatSession);
     }
     chatMessages.appendChild(message);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -927,6 +1010,7 @@ function renderChatSession(session) {
         session.messages.forEach(message => appendChatMessage(message.role, message.content, false, { session }));
     }
 
+    renderChatAttachment(session);
     chatInput.disabled = session.loading;
     chatSend.disabled = session.loading;
     clearChat.disabled = session.loading;
@@ -1029,7 +1113,15 @@ async function sendChatMessage(event) {
     const session = currentChatSession;
     if (!prompt || !poem || !session || session.loading) return;
 
-    session.messages.push({ role: 'user', content: prompt });
+    const attachment = session.pendingAttachment;
+    session.messages.push({
+        role: 'user',
+        content: attachment
+            ? [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: attachment.dataUrl } }]
+            : prompt
+    });
+    session.pendingAttachment = null;
+    renderChatAttachment(session);
     savePoemSession(poem, session);
     chatInput.value = '';
     session.loading = true;
@@ -1092,6 +1184,7 @@ function clearCurrentChat() {
     if (!currentChatSession) return;
     if (currentChatSession.abortController) currentChatSession.abortController.abort();
     currentChatSession.messages = [];
+    currentChatSession.pendingAttachment = null;
     currentChatSession.loading = false;
     currentChatSession.abortController = null;
     savePoemSession(currentPoem, currentChatSession);
@@ -1526,7 +1619,14 @@ function renderPoemImages(poem, session) {
 
         const caption = document.createElement('figcaption');
         caption.textContent = image.style ? `${image.style} · Interpretation ${index + 1}` : `Interpretation ${index + 1}`;
-        if (image.filename) caption.appendChild(downloadLink);
+        if (image.filename) {
+            const discuss = document.createElement('button');
+            discuss.type = 'button';
+            discuss.className = 'media-download';
+            discuss.textContent = 'Discuss';
+            discuss.addEventListener('click', () => attachImageToChat(image, session));
+            caption.append(discuss, downloadLink);
+        }
         figure.appendChild(caption);
         poemImagesGrid.appendChild(figure);
     });
