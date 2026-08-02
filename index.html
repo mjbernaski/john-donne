@@ -99,6 +99,7 @@
                                             <option value="masculine">Masculine · smooth</option>
                                         </select>
                                         <button id="generateAudio" type="button">Read poem</button>
+                                        <a id="downloadAudio" class="media-download" download hidden>Download</a>
                                     </div>
                                 </div>
                                 <div id="geminiKeySetup" class="image-key-setup" hidden>
@@ -128,6 +129,11 @@
                                         <input id="chatBrief" class="chat-toggle-input" type="checkbox">
                                         <span class="chat-toggle-track" aria-hidden="true"></span>
                                         <span class="chat-toggle-text">Be brief</span>
+                                    </label>
+                                    <label class="chat-toggle" for="chatReadReplies" title="Narrate each reply aloud as it arrives">
+                                        <input id="chatReadReplies" class="chat-toggle-input" type="checkbox">
+                                        <span class="chat-toggle-track" aria-hidden="true"></span>
+                                        <span class="chat-toggle-text">Read replies</span>
                                     </label>
                                     <button id="clearChat" class="chat-clear" type="button">New conversation</button>
                                 </div>
@@ -171,6 +177,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260802-4"></script>
+    <script src="app.js?v=20260802-5"></script>
 </body>
 </html>

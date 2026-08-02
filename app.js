@@ -9,11 +9,13 @@ const CHAT_STORAGE_PREFIX = 'john-donne-poem-session-v1:';
 const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
 const SELECTED_BOOK_STORAGE = 'john-donne-selected-book';
 const IMAGE_STYLES_STORAGE = 'john-donne-image-styles';
+const VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
 let selectedStyleLabels = new Set();
 const RECENT_POEMS_LIMIT = 8;
 const IMAGE_API_KEY_STORAGE = 'john-donne-flux-api-key';
 const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
 const BRIEF_MODE_STORAGE = 'john-donne-chat-brief';
+const READ_REPLIES_STORAGE = 'john-donne-chat-read-replies';
 const poemSceneCache = new Map();
 const AUDIO_DB_NAME = 'john-donne-media-v1';
 const AUDIO_STORE_NAME = 'audio';
@@ -53,6 +55,7 @@ const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
 const clearChat = document.getElementById('clearChat');
 const chatBrief = document.getElementById('chatBrief');
+const chatReadReplies = document.getElementById('chatReadReplies');
 const generateImages = document.getElementById('generateImages');
 const imageKeySetup = document.getElementById('imageKeySetup');
 const imageApiKey = document.getElementById('imageApiKey');
@@ -69,6 +72,7 @@ const geminiApiKey = document.getElementById('geminiApiKey');
 const saveGeminiApiKey = document.getElementById('saveGeminiApiKey');
 const poemAudioStatus = document.getElementById('poemAudioStatus');
 const poemAudioPlayer = document.getElementById('poemAudioPlayer');
+const downloadAudio = document.getElementById('downloadAudio');
 const audioTimeRemaining = document.getElementById('audioTimeRemaining');
 const audioTimeRemainingValue = document.getElementById('audioTimeRemainingValue');
 let activeTimedAudio = null;
@@ -448,6 +452,33 @@ function getPoemStorageKey(poem) {
     return `${CHAT_STORAGE_PREFIX}${stableHash(`${poem.title}\n${poem.content}`)}`;
 }
 
+// Blob URLs download as "download.wav" unless the anchor names them, so every
+// saved file is titled "Poet - Poem - detail.ext".
+function buildDownloadName(poem, parts, extension) {
+    const clean = value => String(value)
+        .replace(/[\\/:*?"<>|]+/g, ' ')     // characters filesystems reject
+        .replace(/[‘’]/g, "'")
+        .replace(/[“”]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const title = clean(poem.title).slice(0, 70).replace(/[.\s]+$/, '');
+    const segments = [clean(currentBook.poet), title, ...parts.map(clean)].filter(Boolean);
+    return `${segments.join(' - ')}.${extension}`;
+}
+
+function setDownloadLink(link, url, filename) {
+    if (!url) {
+        link.hidden = true;
+        link.removeAttribute('href');
+        return;
+    }
+    link.href = url;
+    link.download = filename;
+    link.title = `Download ${filename}`;
+    link.hidden = false;
+}
+
 function getPoemAudioKey(poem, voice) {
     return `poem:${stableHash(`${poem.title}\n${poem.content}`)}:${voice}`;
 }
@@ -544,19 +575,27 @@ function isBriefMode() {
     return chatBrief.checked;
 }
 
-function restoreBriefMode() {
+function isReadRepliesMode() {
+    return chatReadReplies.checked;
+}
+
+// Both chat toggles are read at send time, so a change applies to the next turn.
+function restoreChatToggles() {
     try {
         chatBrief.checked = localStorage.getItem(BRIEF_MODE_STORAGE) === 'true';
+        chatReadReplies.checked = localStorage.getItem(READ_REPLIES_STORAGE) === 'true';
     } catch {
         chatBrief.checked = false;
+        chatReadReplies.checked = false;
     }
 }
 
-function saveBriefMode() {
+function saveChatToggles() {
     try {
         localStorage.setItem(BRIEF_MODE_STORAGE, String(chatBrief.checked));
+        localStorage.setItem(READ_REPLIES_STORAGE, String(chatReadReplies.checked));
     } catch {
-        // A blocked storage quota should not disable the toggle itself.
+        // A blocked storage quota should not disable the toggles themselves.
     }
 }
 
@@ -788,7 +827,7 @@ async function sendChatMessage(event) {
         if (!answer.trim()) throw new Error('The model returned an empty response.');
         session.messages.push({ role: 'assistant', content: answer });
         savePoemSession(poem, session);
-        addChatListenControl(assistant.message, answer, session);
+        addChatListenControl(assistant.message, answer, session, isReadRepliesMode());
     } catch (error) {
         const wasAborted = error.name === 'AbortError';
         assistant.message.classList.remove('chat-message--pending');
@@ -1152,9 +1191,10 @@ function setPoemImagesStatus(message, state = '') {
     poemImagesStatus.dataset.state = state;
 }
 
-async function loadFluxImage(filename, imageElement, session) {
+async function loadFluxImage(filename, imageElement, session, onReady = () => {}) {
     if (session.imageObjectUrls.has(filename)) {
         imageElement.src = session.imageObjectUrls.get(filename);
+        onReady(session.imageObjectUrls.get(filename));
         return;
     }
     try {
@@ -1163,6 +1203,7 @@ async function loadFluxImage(filename, imageElement, session) {
         const objectUrl = URL.createObjectURL(await response.blob());
         session.imageObjectUrls.set(filename, objectUrl);
         imageElement.src = objectUrl;
+        onReady(objectUrl);
     } catch (error) {
         imageElement.replaceWith(document.createTextNode('Image unavailable'));
         console.error('Could not load generated image:', error);
@@ -1188,12 +1229,20 @@ function renderPoemImages(poem, session) {
         figure.className = 'poem-image-card';
         figure.dataset.state = image.status;
 
+        const downloadLink = document.createElement('a');
+        downloadLink.className = 'media-download';
+        downloadLink.textContent = 'Download';
+        downloadLink.hidden = true;
+        const downloadName = buildDownloadName(poem, [String(index + 1), image.style], 'png');
+
         if (image.filename) {
             const imageElement = document.createElement('img');
             imageElement.alt = `${image.style ? `${image.style} visual` : 'Visual interpretation'} ${index + 1} of “${poem.title}”`;
             imageElement.loading = 'lazy';
             figure.appendChild(imageElement);
-            loadFluxImage(image.filename, imageElement, session);
+            loadFluxImage(image.filename, imageElement, session, objectUrl => {
+                setDownloadLink(downloadLink, objectUrl, downloadName);
+            });
         } else {
             const placeholder = document.createElement('div');
             placeholder.className = 'poem-image-placeholder';
@@ -1207,6 +1256,7 @@ function renderPoemImages(poem, session) {
 
         const caption = document.createElement('figcaption');
         caption.textContent = image.style ? `${image.style} · Interpretation ${index + 1}` : `Interpretation ${index + 1}`;
+        if (image.filename) caption.appendChild(downloadLink);
         figure.appendChild(caption);
         poemImagesGrid.appendChild(figure);
     });
@@ -1575,7 +1625,7 @@ async function getOrCreateResponseAudio(poem, content, onGenerate) {
     return responseAudioRequests.get(audioKey);
 }
 
-function addChatListenControl(messageElement, content, session) {
+function addChatListenControl(messageElement, content, session, autoPlay = false) {
     if (!session || messageElement.querySelector('.chat-message-audio')) return;
     const poem = currentPoem;
     const audioKey = poem ? getResponseAudioKey(poem, content) : null;
@@ -1590,7 +1640,14 @@ function addChatListenControl(messageElement, content, session) {
     player.className = 'chat-response-player';
     player.controls = true;
     player.hidden = true;
-    controls.append(listenButton, player);
+    const download = document.createElement('a');
+    download.className = 'media-download';
+    download.textContent = 'Download';
+    download.hidden = true;
+    const downloadName = poem
+        ? buildDownloadName(poem, ['commentary', VOICE_NAMES.companion], 'wav')
+        : '';
+    controls.append(listenButton, player, download);
     messageElement.appendChild(controls);
 
     const playResponse = async () => {
@@ -1598,6 +1655,7 @@ function addChatListenControl(messageElement, content, session) {
         if (cachedAudio) {
             player.src = cachedAudio;
             player.hidden = false;
+            setDownloadLink(download, cachedAudio, downloadName);
             player.play().catch(() => {});
             return;
         }
@@ -1613,6 +1671,7 @@ function addChatListenControl(messageElement, content, session) {
             session.responseAudioByText.set(content, objectUrl);
             player.src = objectUrl;
             player.hidden = false;
+            setDownloadLink(download, objectUrl, downloadName);
             listenButton.textContent = 'Play again · Iapetus';
             pendingGeminiRetry = null;
             player.play().catch(() => {});
@@ -1626,6 +1685,8 @@ function addChatListenControl(messageElement, content, session) {
     };
 
     listenButton.addEventListener('click', playResponse);
+    // Restored conversations re-run this on load, so only a fresh reply auto-plays.
+    if (autoPlay) playResponse();
 }
 
 async function restorePoemAudio(poem, session, voice) {
@@ -1652,6 +1713,11 @@ function renderPoemAudio(session) {
     if (cachedAudio) {
         poemAudioPlayer.src = cachedAudio;
         poemAudioPlayer.hidden = false;
+        setDownloadLink(
+            downloadAudio,
+            cachedAudio,
+            buildDownloadName(currentPoem, [VOICE_NAMES[voice] || voice], 'wav')
+        );
         generateAudio.textContent = 'Play reading';
         setPoemAudioStatus(
             voice === 'feminine' ? 'Gacrux · mature feminine voice' : 'Algieba · smooth masculine voice',
@@ -1661,6 +1727,7 @@ function renderPoemAudio(session) {
         poemAudioPlayer.removeAttribute('src');
         poemAudioPlayer.load();
         poemAudioPlayer.hidden = true;
+        setDownloadLink(downloadAudio, '', '');
         if (!session.audioCheckedVoices.has(voice)) {
             generateAudio.textContent = 'Checking saved reading…';
             setPoemAudioStatus('Looking for an earlier performance in this browser…', 'working');
@@ -1712,6 +1779,11 @@ async function generatePoemReading() {
         session.audioByVoice.set(voice, objectUrl);
         poemAudioPlayer.src = objectUrl;
         poemAudioPlayer.hidden = false;
+        setDownloadLink(
+            downloadAudio,
+            objectUrl,
+            buildDownloadName(poem, [VOICE_NAMES[voice] || voice], 'wav')
+        );
         setPoemAudioStatus(
             saved
                 ? 'Reading ready and saved for future visits. Use the player to pause, seek, or replay.'
@@ -1833,7 +1905,8 @@ randomPoem.addEventListener('click', openRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
 chatForm.addEventListener('submit', sendChatMessage);
 clearChat.addEventListener('click', clearCurrentChat);
-chatBrief.addEventListener('change', saveBriefMode);
+chatBrief.addEventListener('change', saveChatToggles);
+chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
@@ -1893,7 +1966,7 @@ searchInput.addEventListener('input', () => {
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    restoreBriefMode();
+    restoreChatToggles();
     restoreSelectedStyles();
     renderStylePicker();
     loadBooks();

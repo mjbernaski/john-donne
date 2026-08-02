@@ -37,6 +37,44 @@
       "readingNotes": "Expansive and unhurried, with the momentum of spoken oratory. Let the long lines run without chopping them, breathe at the commas of a catalogue, and build gradually through an accumulating list. Preserve Whitman's exuberance, tenderness, and direct address to the listener. Use clear modern American pronunciation.",
       "readingScene": "An open room with air and space around the voice, as if addressing a gathered crowd.",
       "readerProfile": "A seasoned reader of nineteenth-century American poetry performing Walt Whitman for an attentive audience."
+    },
+    {
+      "id": "baudelaire-huneker",
+      "name": "Baudelaire · Huneker",
+      "title": "The Poems and Prose Poems of Charles Baudelaire",
+      "subtitle": "English translations, edited by James Huneker (1919)",
+      "description": "Charles Baudelaire (1821-1867) was a French poet whose Les Fleurs du Mal found beauty in the modern city, in boredom, decay and desire, and set the course of European modernism. This edition gathers verse translations by several hands alongside the prose poems.",
+      "poems": "poems-baudelaire.json",
+      "companionLabel": "Baudelaire companion",
+      "chatContext": "Charles Baudelaire · Huneker edition · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/files/36287/36287-h/36287-h.htm",
+      "sourceNote": "The Poems and Prose Poems of Charles Baudelaire, edited by James Huneker (1919), Project Gutenberg ebook 36287",
+      "stripEditorialApparatus": false,
+      "poet": "Charles Baudelaire",
+      "authorProfile": "Charles Baudelaire (1821–1867), a French poet, critic, and translator, and the pivotal figure between Romanticism and modernism. His writing is known for the imagery of the modern city, the pairing of beauty with decay, spleen and ennui, synaesthesia and correspondence, and an unflinching treatment of desire and mortality. IMPORTANT: the reader sees an English translation, not Baudelaire's French. Discuss the translated text in front of you, and when the wording matters say plainly that it is a translator's choice rather than Baudelaire's own word.",
+      "sourceProfile": "The Poems and Prose Poems of Charles Baudelaire, with an introductory preface by James Huneker (New York: Brentano's, 1919), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/36287. The verse is rendered by several translators; the volume also contains the prose poems of Petits Poèmes en Prose.",
+      "readingNotes": "Sensuous and controlled, with a dark elegance. Hold the long sentences together, let the imagery land without hurrying past it, and keep irony dry rather than theatrical. Preserve the tension between beauty and disgust that the poems live on. Pronounce French names and titles correctly.",
+      "readingScene": "A shuttered nineteenth-century room, close and slightly airless, with warm dampened acoustics.",
+      "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience."
+    },
+    {
+      "id": "baudelaire-scott",
+      "name": "Baudelaire · Scott",
+      "title": "The Flowers of Evil",
+      "subtitle": "Translated into English verse by Cyril Scott (1909)",
+      "description": "Cyril Scott's 1909 rendering of Les Fleurs du Mal, one translator's voice across fifty-four poems. Read beside the Huneker edition it shows how differently the same French lines can arrive in English.",
+      "poems": "poems-baudelaire-scott.json",
+      "companionLabel": "Baudelaire companion",
+      "chatContext": "Charles Baudelaire · Cyril Scott translation · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/cache/epub/36098/pg36098.txt",
+      "sourceNote": "The Flowers of Evil, translated into English verse by Cyril Scott (1909), Project Gutenberg ebook 36098",
+      "stripEditorialApparatus": false,
+      "poet": "Charles Baudelaire",
+      "authorProfile": "Charles Baudelaire (1821–1867), a French poet, critic, and translator, and the pivotal figure between Romanticism and modernism. His writing is known for the imagery of the modern city, the pairing of beauty with decay, spleen and ennui, synaesthesia and correspondence, and an unflinching treatment of desire and mortality. IMPORTANT: the reader sees Cyril Scott's 1909 English verse translation, not Baudelaire's French. Discuss the translated text in front of you, and when the wording matters say plainly that it is Scott's choice rather than Baudelaire's own word.",
+      "sourceProfile": "The Flowers of Evil, translated into English verse by Cyril Scott (London: Elkin Mathews, 1909), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/36098. Scott translates a selection of Les Fleurs du Mal into rhymed English verse throughout.",
+      "readingNotes": "Sensuous and controlled, with a dark elegance. Let Scott's rhyme and metre carry without singsong, hold the long sentences together, and keep irony dry rather than theatrical. Preserve the tension between beauty and disgust that the poems live on. Pronounce French names and titles correctly.",
+      "readingScene": "A shuttered nineteenth-century room, close and slightly airless, with warm dampened acoustics.",
+      "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience."
     }
   ]
 }

@@ -9,12 +9,14 @@ collections from the same interface.
 - **Multiple Collections**: Switch between the poetry books listed in `books.json` from the site header
 - **289 Donne Poems**: Complete collection of John Donne's poetry from the 1912 edition edited by Herbert J. C. Grierson
 - **376 Whitman Poems**: The complete 1891-92 arrangement of *Leaves of Grass*
+- **Baudelaire in Two Translations**: 68 pieces from the Huneker edition and 54 from Cyril Scott's verse rendering, kept apart so the same poem can be read in both hands
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
 - **Modal View**: Read full poems in a clean, focused modal interface
 - **Per-Poem AI Chat**: Discuss each poem in a dedicated conversation with a local vLLM model
 - **Persistent Conversations**: Keep each poem's discussion and context across page reloads
 - **Visual Companions**: Generate a length-scaled set of FLUX illustrations for each poem
+- **Chosen Visual Styles**: Pick which of the 24 image styles the illustrations may use, or leave the choice open
 - **Gemini Narration**: Hear poems and model responses performed with distinct voices
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 
@@ -34,18 +36,24 @@ collections from the same interface.
 - `books.json` - The list of collections the site offers, and everything specific to each
 - `poems.json` - Parsed Donne poem data (289 poems)
 - `poems-whitman.json` - Parsed *Leaves of Grass* data (376 poems)
+- `poems-baudelaire.json` - Parsed Huneker-edition Baudelaire data (68 pieces)
+- `poems-baudelaire-scott.json` - Parsed Cyril Scott translation of *The Flowers of Evil* (54 poems)
 - `parse_poems.py` - Python script to parse the Donne text from Project Gutenberg source
 - `parse_whitman.py` - Python script to parse *Leaves of Grass* from Project Gutenberg source
+- `parse_baudelaire.py` - Python script to parse the Huneker Baudelaire edition from Project Gutenberg source
+- `parse_baudelaire_scott.py` - Python script to parse the Cyril Scott translation from Project Gutenberg plain text
 
 ## Collections
 
 The site does not hard-code a single poet. On load it reads `books.json` and
-builds a switcher in the header from it. Today two collections are listed:
+builds a switcher in the header from it. Today four collections are listed:
 
 | Collection | Poems file | Source |
 | --- | --- | --- |
 | The Poems of John Donne | `poems.json` | Grierson edition, 1912 — Gutenberg ebook 48688 |
 | Leaves of Grass, by Walt Whitman | `poems-whitman.json` | Gutenberg ebook 1322 — 376 poems |
+| Baudelaire · Huneker | `poems-baudelaire.json` | Huneker edition, 1919 — Gutenberg ebook 36287 — 68 pieces |
+| Baudelaire · Scott | `poems-baudelaire-scott.json` | Cyril Scott translation, 1909 — Gutenberg ebook 36098 — 54 poems |
 
 Choosing a collection swaps the poems, the page's titles and description, the
 source credit, and the persona the AI companion speaks with. The choice is
@@ -56,6 +64,27 @@ book never resolves in another. Saved chat sessions and generated audio, by
 contrast, are keyed by a hash of the poem's title and text rather than by its
 position in a file, so they never collide between collections and survive a
 re-parse that reorders the poems.
+
+### The two Baudelaires
+
+Baudelaire appears twice, and deliberately so. **Baudelaire · Huneker** is the
+1919 volume edited by James Huneker: 68 pieces in all, 50 verse translations by
+several hands plus the 18 prose poems of *Petits Poèmes en Prose*. Each of its
+poems carries a `section` field of either "The Flowers Of Evil" or "Little
+Poems In Prose". **Baudelaire · Scott** is Cyril Scott's 1909 rendering of *Les
+Fleurs du Mal* into English verse, 54 poems in a single translator's voice.
+
+Keeping them as separate collections is the point: the same poem can be read in
+one hand and then the other. Only about a dozen titles match outright — "Beauty",
+"Spleen", "The Balcony", "The Sick Muse" and a handful more — but that count
+understates the real overlap, since two translators will often give the same
+French poem quite different English titles.
+
+Both entries set `stripEditorialApparatus` to `false`, and both `authorProfile`
+fields say outright that the reader is looking at an English translation rather
+than Baudelaire's French, and that a striking turn of phrase may be the
+translator's choice rather than the poet's. That instruction is why the
+Baudelaire profiles run longer than the other books'.
 
 ### What a book entry holds
 
@@ -75,8 +104,9 @@ front-end code changes.
 
 This per-book boolean controls whether the front end applies the
 Grierson-specific cleanup that removes textual variants and manuscript sigla
-from a poem before displaying it. It is `true` for Donne and **must be `false`
-for any edition without such an apparatus**. One of its rules ends a poem at the
+from a poem before displaying it. It is `true` for Donne alone and **must be
+`false` for any edition without such an apparatus** — Whitman and both
+Baudelaire editions all set it `false`. One of its rules ends a poem at the
 first line containing a year between 1500 and 1899, which would truncate many
 Whitman poems — "Year of Meteors (1859-60)" would lose its title line and
 everything after it.
@@ -185,6 +215,15 @@ Short poems receive one image, with progressively longer poems receiving up to
 five distinct visual interpretations. Conversation history and generated-image
 records are stored separately for each poem in browser storage.
 
+Which visual styles those interpretations use is now the reader's to decide. The
+Visual Companions panel lists all 24 styles, and any of them can be selected or
+deselected. Selecting none keeps the original behaviour: the full set is cycled
+through in order. Selecting some restricts the rotation to just those, repeating
+them if a poem earns more images than the reader has chosen styles. The
+selection is kept in browser storage under a per-browser key, so it holds across
+reloads and applies to every collection; labels that no longer exist in the
+style list are quietly dropped when it loads.
+
 Poem narration uses `gemini-3.1-flash-tts-preview`. Set the Gemini key on the
 local server (recommended), or enter it once in the narration panel:
 
@@ -227,6 +266,32 @@ guessing at it. It relies on three properties of that edition:
 
 It also records the cluster name as an optional `section` field on each poem.
 
+The two Baudelaire editions need a parser each, which is the same rule applied
+twice. To re-parse the Huneker volume:
+
+```bash
+python3 parse_baudelaire.py 36287-h.htm -o poems-baudelaire.json
+```
+
+Ebook 36287 has no `<pre>` blocks at all. Each poem is an `<h3>` title followed
+by `<p>` blocks: a verse paragraph separates its lines with `<br/>`, while the
+prose poems are ordinary paragraphs. Only the two poetry sections are read, so
+Huneker's long critical introduction never reaches the JSON, and the section
+heading each poem sits under is recorded as its `section` field.
+
+To re-parse the Cyril Scott translation:
+
+```bash
+python3 parse_baudelaire_scott.py pg36098.txt -o poems-baudelaire-scott.json
+```
+
+Ebook 36098 is plain text with no markup whatever, so there is nothing to key
+on structurally. Instead the table of contents is read as the list of titles and
+matched against the body in order. Walking the two in step is what lets it
+handle the two different poems both titled "Autumn Song" without guessing, and
+it keeps the front matter out. If a contents entry is never found in the body,
+the script prints a warning rather than failing silently.
+
 ## About John Donne
 
 John Donne (1572-1631) was an English poet, scholar, soldier, and secretary born into a recusant family, who later became a cleric in the Church of England. He is considered the pre-eminent representative of the metaphysical poets. His works are notable for their realistic and sensual style and include sonnets, love poems, religious poems, Latin translations, epigrams, elegies, songs, and satires.
@@ -238,6 +303,17 @@ central figure of nineteenth-century American verse. *Leaves of Grass* grew
 across nine editions from 1855 until his death; the collection here is the
 complete 1891-92 arrangement. His long unrhymed line, expansive catalogues, and
 direct address to the reader reshaped American poetry.
+
+## About Charles Baudelaire
+
+Charles Baudelaire (1821-1867) was a French poet, critic, and translator, and
+the pivotal figure between Romanticism and modernism. *Les Fleurs du Mal* found
+beauty in the modern city, in boredom, decay, and desire, and set the course of
+European poetry after it. Everything here is in English translation: the Huneker
+volume collects verse by several translators alongside the prose poems, while
+Cyril Scott renders a selection of *Les Fleurs du Mal* into rhymed English verse
+throughout. The AI companion is told as much, and will say when a phrase is the
+translator's rather than Baudelaire's.
 
 ## Sources
 
@@ -253,6 +329,19 @@ The Whitman collection is based on:
 - By Walt Whitman
 - The complete 1891-92 arrangement
 - Available at [Project Gutenberg](https://www.gutenberg.org/files/1322/1322-h/1322-h.htm) (ebook 1322)
+
+The first Baudelaire collection is based on:
+- **The Poems and Prose Poems of Charles Baudelaire**
+- With an introductory preface by James Huneker
+- New York: Brentano's, 1919
+- Verse by several translators, plus the prose poems of *Petits Poèmes en Prose*
+- Available at [Project Gutenberg](https://www.gutenberg.org/files/36287/36287-h/36287-h.htm) (ebook 36287)
+
+The second Baudelaire collection is based on:
+- **The Flowers of Evil**
+- Translated into English verse by Cyril Scott
+- London: Elkin Mathews, 1909
+- Available at [Project Gutenberg](https://www.gutenberg.org/cache/epub/36098/pg36098.txt) (ebook 36098)
 
 ## License
 
