@@ -13,6 +13,7 @@ const IMAGE_STEER_STORAGE = 'john-donne-image-steer';
 const USER_POEMS_STORAGE = 'john-donne-user-poems';
 const VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
 let selectedStyleLabels = new Set();
+let editingPoem = null;
 const RECENT_POEMS_LIMIT = 8;
 const IMAGE_API_KEY_STORAGE = 'john-donne-flux-api-key';
 const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
@@ -48,6 +49,8 @@ const pasteAuthorInput = document.getElementById('pasteAuthorInput');
 const pasteTextInput = document.getElementById('pasteTextInput');
 const pasteStatus = document.getElementById('pasteStatus');
 const exportPoems = document.getElementById('exportPoems');
+const pasteSubmit = document.getElementById('pasteSubmit');
+const cancelEdit = document.getElementById('cancelEdit');
 const searchInput = document.getElementById('searchInput');
 const clearSearch = document.getElementById('clearSearch');
 const resultCount = document.getElementById('resultCount');
@@ -237,7 +240,7 @@ function saveUserPoems(poems) {
     }
 }
 
-function addUserPoem(event) {
+function submitUserPoem(event) {
     event.preventDefault();
     const title = pasteTitleInput.value.trim().replace(/\s+/g, ' ');
     const author = pasteAuthorInput.value.trim().replace(/\s+/g, ' ');
@@ -250,25 +253,46 @@ function addUserPoem(event) {
     }
 
     const poems = loadUserPoems();
-    if (poems.some(poem => poem.title === title && poem.content === content)) {
+    const existing = editingPoem
+        ? poems.findIndex(poem => poem.title === editingPoem.title && poem.content === editingPoem.content)
+        : -1;
+    if (editingPoem && existing === -1) {
+        setPasteStatus('That poem is no longer on the shelf.', 'error');
+        stopEditingUserPoem();
+        return;
+    }
+
+    const clashes = poems.some((poem, index) =>
+        index !== existing && poem.title === title && poem.content === content);
+    if (clashes) {
         setPasteStatus('That poem is already on the shelf.', 'error');
         return;
     }
 
-    poems.push({
+    const updated = {
         title,
         content,
         firstLine: content.split('\n').find(line => line.trim()) || '',
         ...(author ? { author } : {})
-    });
+    };
+
+    if (existing === -1) {
+        poems.push(updated);
+    } else {
+        // The chat session is keyed by title and text, so an edit would orphan
+        // the conversation unless it is carried over to the new key.
+        carryPoemHistory(poems[existing], updated);
+        poems[existing] = updated;
+    }
 
     if (!saveUserPoems(poems)) {
         setPasteStatus('This browser would not store the poem.', 'error');
         return;
     }
 
-    pasteForm.reset();
-    setPasteStatus(`“${title}” added.`, 'done');
+    const wasEditing = existing !== -1;
+    stopEditingUserPoem();
+    setPasteStatus(`“${title}” ${wasEditing ? 'updated' : 'added'}.`, 'done');
     allPoems = poems;
     filteredPoems = allPoems;
     searchInput.value = '';
@@ -276,10 +300,66 @@ function addUserPoem(event) {
     displayPoems(allPoems);
     updateResultCount(allPoems.length, allPoems.length);
     updateExportButton();
+    renderRecentlyVisited();
     pasteTitleInput.focus();
 }
 
+function startEditingUserPoem(poem) {
+    editingPoem = poem;
+    pasteTitleInput.value = poem.title;
+    pasteAuthorInput.value = poem.author || '';
+    pasteTextInput.value = poem.content;
+    pasteSubmit.textContent = 'Save changes';
+    cancelEdit.hidden = false;
+    pastePanel.dataset.mode = 'edit';
+    setPasteStatus(`Editing “${poem.title}”.`);
+    pastePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    pasteTextInput.focus();
+}
+
+function stopEditingUserPoem() {
+    editingPoem = null;
+    pasteForm.reset();
+    pasteSubmit.textContent = 'Add to the shelf';
+    cancelEdit.hidden = true;
+    delete pastePanel.dataset.mode;
+}
+
+function cancelUserPoemEdit() {
+    stopEditingUserPoem();
+    setPasteStatus('Edit discarded.');
+}
+
+// Move a poem's saved conversation and its place in the recents to the key its
+// new text hashes to, so correcting a typo does not lose the discussion.
+function carryPoemHistory(oldPoem, newPoem) {
+    const oldKey = getPoemStorageKey(oldPoem);
+    const newKey = getPoemStorageKey(newPoem);
+    if (oldKey === newKey) return;
+
+    try {
+        const stored = localStorage.getItem(oldKey);
+        if (stored) {
+            const session = JSON.parse(stored);
+            if (session && session.context) session.context.poemTitle = newPoem.title;
+            localStorage.setItem(newKey, JSON.stringify(session));
+            localStorage.removeItem(oldKey);
+        }
+    } catch (error) {
+        console.warn('Could not carry the saved conversation across:', error);
+    }
+
+    const position = recentPoemIds.indexOf(getPoemId(oldPoem));
+    if (position !== -1) {
+        recentPoemIds[position] = getPoemId(newPoem);
+        saveRecentlyVisited();
+    }
+}
+
 function removeUserPoem(poem) {
+    if (editingPoem && editingPoem.title === poem.title && editingPoem.content === poem.content) {
+        stopEditingUserPoem();
+    }
     const remaining = loadUserPoems().filter(
         stored => !(stored.title === poem.title && stored.content === poem.content)
     );
@@ -329,6 +409,7 @@ function applyBookIdentity(book) {
     bookSourceNote.textContent = book.sourceNote;
     chatContext.textContent = book.chatContext;
     pastePanel.hidden = !book.userPoems;
+    stopEditingUserPoem();
     setPasteStatus('');
     bookSourceCredit.hidden = !book.sourceUrl;
     searchInput.placeholder = `Search ${book.name} by title or content…`;
@@ -419,7 +500,11 @@ function displayPoems(poems) {
         const preview = getPreview(poem.content);
         return `
             <div class="poem-card" data-index="${index}">
-                ${removable ? '<button class="poem-remove" type="button" aria-label="Remove this poem">&times;</button>' : ''}
+                ${removable ? `
+                    <div class="poem-card-tools">
+                        <button class="poem-edit" type="button" aria-label="Edit this poem">Edit</button>
+                        <button class="poem-remove" type="button" aria-label="Remove this poem">&times;</button>
+                    </div>` : ''}
                 <h3 class="poem-title">${escapeHtml(poem.title)}</h3>
                 ${poem.author ? `<p class="poem-byline">${escapeHtml(poem.author)}</p>` : ''}
                 <p class="poem-preview">${escapeHtml(preview)}</p>
@@ -439,6 +524,13 @@ function displayPoems(poems) {
             remove.addEventListener('click', event => {
                 event.stopPropagation();   // the card itself opens the poem
                 removeUserPoem(filteredPoems[parseInt(card.dataset.index)]);
+            });
+        }
+        const edit = card.querySelector('.poem-edit');
+        if (edit) {
+            edit.addEventListener('click', event => {
+                event.stopPropagation();
+                startEditingUserPoem(filteredPoems[parseInt(card.dataset.index)]);
             });
         }
     });
@@ -2092,7 +2184,8 @@ chatBrief.addEventListener('change', saveChatToggles);
 chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
 imageSteer.addEventListener('change', saveSteerText);
-pasteForm.addEventListener('submit', addUserPoem);
+pasteForm.addEventListener('submit', submitUserPoem);
+cancelEdit.addEventListener('click', cancelUserPoemEdit);
 exportPoems.addEventListener('click', exportUserPoems);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);

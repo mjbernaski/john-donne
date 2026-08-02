@@ -306,6 +306,11 @@ body {
     display: none;
 }
 
+.paste-panel[data-mode='edit'] {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.08), var(--shadow);
+}
+
 .paste-title {
     color: var(--primary-color);
     font-family: var(--font-serif);
@@ -520,11 +525,52 @@ body {
 }
 
 /* Sits inside the card padding, clear of the left accent bar. */
-.poem-remove {
+.poem-card-tools {
     position: absolute;
     top: 9px;
     right: 9px;
     z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.poem-edit {
+    padding: 5px 9px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: none;
+    color: var(--text-light);
+    font-family: var(--font-sans);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0.28;
+    transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.poem-card:hover .poem-edit,
+.poem-card:focus-within .poem-edit {
+    opacity: 1;
+}
+
+.poem-edit:hover,
+.poem-edit:focus-visible {
+    opacity: 1;
+    border-color: #baa994;
+    background: white;
+    color: var(--secondary-color);
+}
+
+.poem-edit:focus-visible {
+    outline: 3px solid rgba(212, 175, 55, 0.48);
+    outline-offset: 2px;
+}
+
+.poem-remove {
     display: flex;
     width: 26px;
     height: 26px;
@@ -570,8 +616,8 @@ body {
     line-height: 1.3;
 }
 
-.poem-remove + .poem-title {
-    padding-right: 22px;
+.poem-card-tools + .poem-title {
+    padding-right: 74px;
 }
 
 .poem-title:has(+ .poem-byline) {

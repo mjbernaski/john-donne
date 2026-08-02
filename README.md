@@ -104,6 +104,17 @@ immediately, and each card in that collection carries a `×` to remove it again.
 Everything else — search, recently visited, the companion, visual companions,
 narration — behaves as it does in the other books.
 
+Each card also carries an **Edit** control, which loads that poem back into the
+panel for correction — title, poet, and text alike. Saving replaces the entry in
+place rather than adding a second copy, and Cancel abandons the change.
+
+Editing matters more than it looks, because a poem's saved conversation and its
+place in the recently-visited list are both keyed by a hash of its title and
+text. Correcting a single typo therefore changes the key. The edit carries the
+saved conversation across to the new key and updates the recents entry, so the
+discussion survives. Generated narration does not: it is a reading of the older
+wording, so it is left behind and the poem can be read aloud again.
+
 Because that storage belongs to one browser profile and nothing else, the panel
 also offers **Export all as JSON**, which saves the shelf as
 `Pasted poems <date>.json`. The button appears only when there is something to
