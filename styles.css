@@ -587,6 +587,126 @@ body {
     font-size: 0.64rem;
 }
 
+.image-styles {
+    margin-top: 15px;
+    padding-top: 13px;
+    border-top: 1px solid var(--border-color);
+}
+
+.image-styles-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 9px;
+}
+
+.image-styles-eyebrow {
+    color: var(--secondary-color);
+    font-family: var(--font-sans);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.image-styles-clear {
+    flex: 0 0 auto;
+    padding: 3px 0;
+    border: 0;
+    background: none;
+    color: var(--secondary-color);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+.image-styles-clear[hidden] {
+    display: none;
+}
+
+.image-styles-clear:hover {
+    text-decoration: underline;
+}
+
+.image-styles-clear:focus-visible {
+    outline: 3px solid rgba(212, 175, 55, 0.48);
+    outline-offset: 2px;
+}
+
+.image-styles-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 132px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 4px 2px 2px;
+}
+
+.image-styles-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.image-styles-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.image-styles-options::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.image-styles-options::-webkit-scrollbar-thumb:hover {
+    background: #baa994;
+}
+
+.image-style {
+    padding: 5px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--text-light);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    font-weight: 500;
+    line-height: 1.3;
+    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.image-style:hover {
+    border-color: #baa994;
+    background: white;
+    color: var(--secondary-color);
+}
+
+.image-style:focus-visible {
+    outline: 3px solid rgba(212, 175, 55, 0.48);
+    outline-offset: 2px;
+}
+
+/* Selected chips carry weight and a filled border so they read in greyscale. */
+.image-style--selected,
+.image-style--selected:hover {
+    border-color: var(--secondary-color);
+    background: var(--secondary-color);
+    color: white;
+    font-weight: 700;
+}
+
+.image-styles-summary {
+    margin-top: 8px;
+    color: var(--text-light);
+    font-family: var(--font-sans);
+    font-size: 0.64rem;
+}
+
+.image-styles-summary:empty {
+    display: none;
+}
+
 .poem-images-status {
     margin-top: 10px;
     color: var(--text-light);
@@ -1353,6 +1473,16 @@ body {
 
     .poem-images-grid {
         grid-template-columns: 1fr;
+    }
+
+    .image-styles-options {
+        max-height: 118px;
+        gap: 5px;
+    }
+
+    .image-style {
+        padding: 5px 9px;
+        font-size: 0.65rem;
     }
 
     .poem-audio-heading,

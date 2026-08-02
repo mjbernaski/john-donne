@@ -8,6 +8,8 @@ const FLUX_PROXY_URL = '/api/flux';
 const CHAT_STORAGE_PREFIX = 'john-donne-poem-session-v1:';
 const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
 const SELECTED_BOOK_STORAGE = 'john-donne-selected-book';
+const IMAGE_STYLES_STORAGE = 'john-donne-image-styles';
+let selectedStyleLabels = new Set();
 const RECENT_POEMS_LIMIT = 8;
 const IMAGE_API_KEY_STORAGE = 'john-donne-flux-api-key';
 const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
@@ -55,6 +57,9 @@ const generateImages = document.getElementById('generateImages');
 const imageKeySetup = document.getElementById('imageKeySetup');
 const imageApiKey = document.getElementById('imageApiKey');
 const saveImageApiKey = document.getElementById('saveImageApiKey');
+const imageStyleOptions = document.getElementById('imageStyleOptions');
+const imageStylesSummary = document.getElementById('imageStylesSummary');
+const clearImageStyles = document.getElementById('clearImageStyles');
 const poemImagesStatus = document.getElementById('poemImagesStatus');
 const poemImagesGrid = document.getElementById('poemImagesGrid');
 const poemVoice = document.getElementById('poemVoice');
@@ -891,105 +896,190 @@ async function describePoemScene(poem) {
     return pending;
 }
 
+// The visual styles a reader can choose from in the Visual Companions panel.
+const VISUAL_STYLES = [
+    {
+        label: 'Fine-art photograph',
+        prompt: 'Fine-art cinematic photograph with natural skin and material detail, dramatic practical lighting, shallow depth of field, subtle film grain, and historically plausible staging. It must read unmistakably as a photograph, not a painting.'
+    },
+    {
+        label: 'Oil painting',
+        prompt: 'Expressive oil painting on linen with visible brushwork, layered glazes, rich chiaroscuro, museum-quality texture, and a restrained seventeenth-century palette broken by luminous highlights.'
+    },
+    {
+        label: 'Editorial cartoon',
+        prompt: 'Sophisticated literary editorial cartoon with bold simplified shapes, witty visual exaggeration, crisp ink contours, selective color, and an intelligent graphic composition; elegant rather than childish.'
+    },
+    {
+        label: 'Charcoal sketch',
+        prompt: 'Loose charcoal, graphite, and ink sketch on warm textured paper, energetic searching lines, expressive cross-hatching, smudged shadows, and selective unfinished negative space.'
+    },
+    {
+        label: 'Warhol-style pop art',
+        prompt: '1960s Warhol-style pop-art screen print with a repeated iconic motif, flattened high-contrast forms, off-register ink, halftone texture, and audacious blocks of saturated color.'
+    },
+    {
+        label: 'Watercolor',
+        prompt: 'Luminous watercolor painting on cold-pressed paper with transparent washes, blooms of pigment, soft lost edges, restrained detail, and generous areas of untouched paper.'
+    },
+    {
+        label: 'Linocut print',
+        prompt: 'Hand-carved linocut print with forceful black-and-ivory shapes, visible gouge marks, compressed perspective, and one sparingly applied accent color.'
+    },
+    {
+        label: 'Cyanotype',
+        prompt: 'Experimental cyanotype photogram in deep Prussian blue and ghostly white, with botanical silhouettes, antique paper fibers, solar exposure artifacts, and poetic negative space.'
+    },
+    {
+        label: 'Surrealist collage',
+        prompt: 'Dreamlike surrealist collage assembled from antique engravings, astronomical diagrams, torn paper, uncanny changes of scale, and seamless impossible juxtapositions.'
+    },
+    {
+        label: 'Illuminated manuscript',
+        prompt: 'Lavish illuminated-manuscript miniature on aged vellum with jewel-like pigments, burnished gold leaf, intricate marginal imagery, and medieval visual symbolism, but absolutely no writing or letterforms.'
+    },
+    {
+        label: 'Stained glass',
+        prompt: 'Radiant stained-glass composition with hand-cut colored panes, dark lead came, glowing transmitted light, simplified figures, and richly symbolic jewel tones.'
+    },
+    {
+        label: 'Japanese woodblock',
+        prompt: 'Elegant ukiyo-e-inspired Japanese woodblock print with flat mineral colors, graceful contour lines, patterned surfaces, asymmetrical framing, and expressive weather or water.'
+    },
+    {
+        label: 'Art Nouveau poster',
+        prompt: 'Ornamental Art Nouveau poster image with sinuous botanical curves, poised figures, decorative borders, muted jewel tones, and flat lithographic color, with no typography or lettering.'
+    },
+    {
+        label: 'Bauhaus abstraction',
+        prompt: 'Bauhaus-inspired geometric abstraction using circles, planes, grids, primary accents, disciplined negative space, and a precise visual rhythm that translates the poem into shape.'
+    },
+    {
+        label: 'Film noir',
+        prompt: 'Black-and-white film-noir still photographed in hard chiaroscuro, rain-slick atmosphere, deep shadows, expressive silhouettes, oblique camera angles, and fine 35mm grain.'
+    },
+    {
+        label: 'Renaissance fresco',
+        prompt: 'Monumental Renaissance fresco with balanced figural composition, architectural perspective, mineral pigments embedded in weathered plaster, and quiet symbolic gestures.'
+    },
+    {
+        label: 'Paper cutout',
+        prompt: 'Intricate layered paper-cut diorama with tactile deckled edges, cast shadows between layers, limited colors, delicate silhouettes, and theatrical depth.'
+    },
+    {
+        label: 'Mosaic',
+        prompt: 'Hand-laid mosaic made from irregular glass and stone tesserae, shimmering gold pieces, fractured contours, iconic frontal forms, and luminous surface variation.'
+    },
+    {
+        label: 'Graphic novel',
+        prompt: 'Dramatic graphic-novel panel with expressive brush-ink shadows, cinematic framing, controlled spot color, dynamic anatomy, and sophisticated sequential-art energy without speech balloons.'
+    },
+    {
+        label: 'Pastel drawing',
+        prompt: 'Velvety soft-pastel drawing on dark toothed paper with layered color, powdery edges, vigorous hand marks, atmospheric light, and intimate emotional immediacy.'
+    },
+    {
+        label: 'Ceramic tableau',
+        prompt: 'Handmade glazed-ceramic tableau with sculpted figures and symbols, crackled surfaces, pooled glaze, kiln variations, and the tactile charm of an art-object photographed in a studio.'
+    },
+    {
+        label: 'Retro science fiction',
+        prompt: 'Retro-futurist 1950s science-fiction paperback cover aesthetic with cosmic scale, airbrushed celestial forms, bold dramatic lighting, aged printing texture, and no title or lettering.'
+    },
+    {
+        label: 'Embroidery',
+        prompt: 'Elaborate hand-embroidered textile image with visible silk and metallic threads, varied stitches, dimensional knots, fabric grain, and symbolic motifs arranged like a narrative tapestry.'
+    },
+    {
+        label: 'Minimalist ink wash',
+        prompt: 'Contemplative monochrome ink-wash painting with fluid tonal gradients, a few decisive brushstrokes, misty spatial depth, and radical, expressive emptiness.'
+    }
+];
+
+// An empty selection means every style, cycled in order across a poem's images.
+function getSelectedStyles() {
+    const chosen = VISUAL_STYLES.filter(style => selectedStyleLabels.has(style.label));
+    return chosen.length ? chosen : VISUAL_STYLES;
+}
+
+function restoreSelectedStyles() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(IMAGE_STYLES_STORAGE) || '[]');
+        const known = new Set(VISUAL_STYLES.map(style => style.label));
+        selectedStyleLabels = new Set(
+            (Array.isArray(stored) ? stored : []).filter(label => known.has(label))
+        );
+    } catch {
+        selectedStyleLabels = new Set();
+    }
+}
+
+function saveSelectedStyles() {
+    try {
+        localStorage.setItem(IMAGE_STYLES_STORAGE, JSON.stringify([...selectedStyleLabels]));
+    } catch {
+        // A blocked storage quota should not disable the picker.
+    }
+}
+
+function renderStylePicker() {
+    imageStyleOptions.replaceChildren();
+
+    VISUAL_STYLES.forEach(style => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'image-style';
+        option.textContent = style.label;
+        option.dataset.styleLabel = style.label;
+        const selected = selectedStyleLabels.has(style.label);
+        option.classList.toggle('image-style--selected', selected);
+        option.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        option.addEventListener('click', () => toggleStyle(style.label));
+        imageStyleOptions.appendChild(option);
+    });
+
+    updateStyleSummary();
+}
+
+function toggleStyle(label) {
+    if (selectedStyleLabels.has(label)) {
+        selectedStyleLabels.delete(label);
+    } else {
+        selectedStyleLabels.add(label);
+    }
+    saveSelectedStyles();
+    renderStylePicker();
+}
+
+function clearStyleSelection() {
+    if (!selectedStyleLabels.size) return;
+    selectedStyleLabels.clear();
+    saveSelectedStyles();
+    renderStylePicker();
+}
+
+function updateStyleSummary() {
+    const chosen = selectedStyleLabels.size;
+    const planned = currentPoem ? getPoemImageCount(currentPoem) : 0;
+    clearImageStyles.hidden = chosen === 0;
+
+    if (!chosen) {
+        imageStylesSummary.textContent = `Cycling through all ${VISUAL_STYLES.length} styles. Pick one or more to choose for yourself.`;
+        return;
+    }
+    if (!planned) {
+        imageStylesSummary.textContent = `${chosen} style${chosen === 1 ? '' : 's'} selected.`;
+        return;
+    }
+    // Fewer styles than images means the selection repeats; more means only the first are reached.
+    const used = Math.min(chosen, planned);
+    const note = chosen < planned
+        ? ` They repeat across the ${planned} images.`
+        : (chosen > planned ? ` This poem receives ${planned}, so the first ${used} are used.` : '');
+    imageStylesSummary.textContent = `${chosen} style${chosen === 1 ? '' : 's'} selected.${note}`;
+}
+
 function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
-    const visualStyles = [
-        {
-            label: 'Fine-art photograph',
-            prompt: 'Fine-art cinematic photograph with natural skin and material detail, dramatic practical lighting, shallow depth of field, subtle film grain, and historically plausible staging. It must read unmistakably as a photograph, not a painting.'
-        },
-        {
-            label: 'Oil painting',
-            prompt: 'Expressive oil painting on linen with visible brushwork, layered glazes, rich chiaroscuro, museum-quality texture, and a restrained seventeenth-century palette broken by luminous highlights.'
-        },
-        {
-            label: 'Editorial cartoon',
-            prompt: 'Sophisticated literary editorial cartoon with bold simplified shapes, witty visual exaggeration, crisp ink contours, selective color, and an intelligent graphic composition; elegant rather than childish.'
-        },
-        {
-            label: 'Charcoal sketch',
-            prompt: 'Loose charcoal, graphite, and ink sketch on warm textured paper, energetic searching lines, expressive cross-hatching, smudged shadows, and selective unfinished negative space.'
-        },
-        {
-            label: 'Warhol-style pop art',
-            prompt: '1960s Warhol-style pop-art screen print with a repeated iconic motif, flattened high-contrast forms, off-register ink, halftone texture, and audacious blocks of saturated color.'
-        },
-        {
-            label: 'Watercolor',
-            prompt: 'Luminous watercolor painting on cold-pressed paper with transparent washes, blooms of pigment, soft lost edges, restrained detail, and generous areas of untouched paper.'
-        },
-        {
-            label: 'Linocut print',
-            prompt: 'Hand-carved linocut print with forceful black-and-ivory shapes, visible gouge marks, compressed perspective, and one sparingly applied accent color.'
-        },
-        {
-            label: 'Cyanotype',
-            prompt: 'Experimental cyanotype photogram in deep Prussian blue and ghostly white, with botanical silhouettes, antique paper fibers, solar exposure artifacts, and poetic negative space.'
-        },
-        {
-            label: 'Surrealist collage',
-            prompt: 'Dreamlike surrealist collage assembled from antique engravings, astronomical diagrams, torn paper, uncanny changes of scale, and seamless impossible juxtapositions.'
-        },
-        {
-            label: 'Illuminated manuscript',
-            prompt: 'Lavish illuminated-manuscript miniature on aged vellum with jewel-like pigments, burnished gold leaf, intricate marginal imagery, and medieval visual symbolism, but absolutely no writing or letterforms.'
-        },
-        {
-            label: 'Stained glass',
-            prompt: 'Radiant stained-glass composition with hand-cut colored panes, dark lead came, glowing transmitted light, simplified figures, and richly symbolic jewel tones.'
-        },
-        {
-            label: 'Japanese woodblock',
-            prompt: 'Elegant ukiyo-e-inspired Japanese woodblock print with flat mineral colors, graceful contour lines, patterned surfaces, asymmetrical framing, and expressive weather or water.'
-        },
-        {
-            label: 'Art Nouveau poster',
-            prompt: 'Ornamental Art Nouveau poster image with sinuous botanical curves, poised figures, decorative borders, muted jewel tones, and flat lithographic color, with no typography or lettering.'
-        },
-        {
-            label: 'Bauhaus abstraction',
-            prompt: 'Bauhaus-inspired geometric abstraction using circles, planes, grids, primary accents, disciplined negative space, and a precise visual rhythm that translates the poem into shape.'
-        },
-        {
-            label: 'Film noir',
-            prompt: 'Black-and-white film-noir still photographed in hard chiaroscuro, rain-slick atmosphere, deep shadows, expressive silhouettes, oblique camera angles, and fine 35mm grain.'
-        },
-        {
-            label: 'Renaissance fresco',
-            prompt: 'Monumental Renaissance fresco with balanced figural composition, architectural perspective, mineral pigments embedded in weathered plaster, and quiet symbolic gestures.'
-        },
-        {
-            label: 'Paper cutout',
-            prompt: 'Intricate layered paper-cut diorama with tactile deckled edges, cast shadows between layers, limited colors, delicate silhouettes, and theatrical depth.'
-        },
-        {
-            label: 'Mosaic',
-            prompt: 'Hand-laid mosaic made from irregular glass and stone tesserae, shimmering gold pieces, fractured contours, iconic frontal forms, and luminous surface variation.'
-        },
-        {
-            label: 'Graphic novel',
-            prompt: 'Dramatic graphic-novel panel with expressive brush-ink shadows, cinematic framing, controlled spot color, dynamic anatomy, and sophisticated sequential-art energy without speech balloons.'
-        },
-        {
-            label: 'Pastel drawing',
-            prompt: 'Velvety soft-pastel drawing on dark toothed paper with layered color, powdery edges, vigorous hand marks, atmospheric light, and intimate emotional immediacy.'
-        },
-        {
-            label: 'Ceramic tableau',
-            prompt: 'Handmade glazed-ceramic tableau with sculpted figures and symbols, crackled surfaces, pooled glaze, kiln variations, and the tactile charm of an art-object photographed in a studio.'
-        },
-        {
-            label: 'Retro science fiction',
-            prompt: 'Retro-futurist 1950s science-fiction paperback cover aesthetic with cosmic scale, airbrushed celestial forms, bold dramatic lighting, aged printing texture, and no title or lettering.'
-        },
-        {
-            label: 'Embroidery',
-            prompt: 'Elaborate hand-embroidered textile image with visible silk and metallic threads, varied stitches, dimensional knots, fabric grain, and symbolic motifs arranged like a narrative tapestry.'
-        },
-        {
-            label: 'Minimalist ink wash',
-            prompt: 'Contemplative monochrome ink-wash painting with fluid tonal gradients, a few decisive brushstrokes, misty spatial depth, and radical, expressive emptiness.'
-        }
-    ];
     const directions = [
         'Center the poem’s strongest symbolic image in an intimate, dramatic composition.',
         'Interpret its governing figure of speech as a surprising visual relationship between human figures and the natural world.',
@@ -998,9 +1088,11 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
         'Compose a wide, cinematic culmination that unites the poem’s major images without becoming a literal collage.'
     ];
 
+    const styles = getSelectedStyles();
+
     return Array.from({ length: count }, (_, index) => {
         const variationIndex = variationOffset + index;
-        const style = visualStyles[variationIndex % visualStyles.length];
+        const style = styles[variationIndex % styles.length];
         const direction = directions[variationIndex % directions.length];
         return {
             style: style.label,
@@ -1079,6 +1171,7 @@ async function loadFluxImage(filename, imageElement, session) {
 
 function renderPoemImages(poem, session) {
     poemImagesGrid.replaceChildren();
+    updateStyleSummary();
 
     const count = getPoemImageCount(poem);
     const visibleImages = session.images.filter(image => image.status !== 'error');
@@ -1741,6 +1834,7 @@ closeModal.addEventListener('click', closePoemModal);
 chatForm.addEventListener('submit', sendChatMessage);
 clearChat.addEventListener('click', clearCurrentChat);
 chatBrief.addEventListener('change', saveBriefMode);
+clearImageStyles.addEventListener('click', clearStyleSelection);
 generateImages.addEventListener('click', generatePoemImageSet);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
 imageApiKey.addEventListener('keydown', event => {
@@ -1800,5 +1894,7 @@ searchInput.addEventListener('input', () => {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     restoreBriefMode();
+    restoreSelectedStyles();
+    renderStylePicker();
     loadBooks();
 });
