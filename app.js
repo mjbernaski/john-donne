@@ -375,7 +375,7 @@ function carryPoemHistory(oldPoem, newPoem) {
 }
 
 async function removeUserPoem(poem) {
-    if (editingPoem && editingPoem.title === poem.title && editingPoem.content === poem.content) {
+    if (editingPoem && editingPoem.id === poem.id) {
         stopEditingUserPoem();
     }
     try {
