@@ -5,15 +5,17 @@
     <key>Label</key>
     <string>com.johndonne.poetry-server</string>
 
+    <!-- The checkout lives on a volume whose name contains a space, so the
+         path is quoted inside the shell command. server.py chdirs to its own
+         directory at startup, which is why no WorkingDirectory is needed, and
+         it reads the bind address and port from config.json, which is why no
+         --host or --port is passed. -->
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
         <string>-lic</string>
-        <string>exec /opt/homebrew/bin/python3 -u /Users/michaelbernaski/Developer/john-donne/server.py --host 0.0.0.0 --port 8000</string>
+        <string>exec /usr/local/bin/python3 -u "/Volumes/Disk B/john-donne/server.py"</string>
     </array>
-
-    <key>WorkingDirectory</key>
-    <string>/Users/michaelbernaski/Developer/john-donne</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -23,8 +25,8 @@
     <integer>5</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/michaelbernaski/Developer/john-donne/server.log</string>
+    <string>/Users/michaelbernaski/Library/Logs/poetry-server.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/michaelbernaski/Developer/john-donne/server.error.log</string>
+    <string>/Users/michaelbernaski/Library/Logs/poetry-server.error.log</string>
 </dict>
 </plist>
