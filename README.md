@@ -221,10 +221,10 @@ address and port:
 
 ```json
 {
-  "server": { "host": "0.0.0.0", "port": 8000 },
+  "server": { "host": "0.0.0.0", "port": 8888 },
   "upstreams": {
     "flux": "http://192.168.5.40:2222",
-    "vllm": "http://192.168.5.46:8100"
+    "vllm": "http://192.168.5.40:8899"
   }
 }
 ```
