@@ -10,6 +10,7 @@ collections from the same interface.
 - **289 Donne Poems**: Complete collection of John Donne's poetry from the 1912 edition edited by Herbert J. C. Grierson
 - **376 Whitman Poems**: The complete 1891-92 arrangement of *Leaves of Grass*
 - **Baudelaire in Two Translations**: 68 pieces from the Huneker edition and 54 from Cyril Scott's verse rendering, kept apart so the same poem can be read in both hands
+- **Two Shakespeare Collections**: 41 selected soliloquies and, separately, the complete plays and poems arranged for reading by scene or individual poem
 - **A Shelf of Your Own**: Paste any poem into the Miscellaneous collection and it gains the same companion, images, and narration as the rest
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
@@ -41,15 +42,19 @@ collections from the same interface.
 - `poems-whitman.json` - Parsed *Leaves of Grass* data (376 poems)
 - `poems-baudelaire.json` - Parsed Huneker-edition Baudelaire data (68 pieces)
 - `poems-baudelaire-scott.json` - Parsed Cyril Scott translation of *The Flowers of Evil* (54 poems)
+- `poems-shakespeare.json` - A curated collection of 41 Shakespeare soliloquies
+- `poems-shakespeare-complete.json` - The complete Shakespeare corpus, divided into sonnets, play front matter, scenes, and long poems
 - `parse_poems.py` - Python script to parse the Donne text from Project Gutenberg source
 - `parse_whitman.py` - Python script to parse *Leaves of Grass* from Project Gutenberg source
 - `parse_baudelaire.py` - Python script to parse the Huneker Baudelaire edition from Project Gutenberg source
 - `parse_baudelaire_scott.py` - Python script to parse the Cyril Scott translation from Project Gutenberg plain text
+- `parse_shakespeare.py` - Python script to extract the curated soliloquies
+- `parse_shakespeare_complete.py` - Python script to transform the complete corpus JSON from `mjbernaski/shakespeare`
 
 ## Collections
 
 The site does not hard-code a single poet. On load it reads `books.json` and
-builds a switcher in the header from it. Today five collections are listed:
+builds a switcher in the header from it. Today seven collections are listed:
 
 | Collection | Poems file | Source |
 | --- | --- | --- |
@@ -57,6 +62,8 @@ builds a switcher in the header from it. Today five collections are listed:
 | Leaves of Grass, by Walt Whitman | `poems-whitman.json` | Gutenberg ebook 1322 — 376 poems |
 | Baudelaire · Huneker | `poems-baudelaire.json` | Huneker edition, 1919 — Gutenberg ebook 36287 — 68 pieces |
 | Baudelaire · Scott | `poems-baudelaire-scott.json` | Cyril Scott translation, 1909 — Gutenberg ebook 36098 — 54 poems |
+| Shakespeare's Soliloquies | `poems-shakespeare.json` | Gutenberg ebook 100 — 41 selected speeches |
+| Shakespeare · Complete | `poems-shakespeare-complete.json` | Gutenberg ebook 100 — complete corpus arranged by sonnet, scene, and long poem |
 | Miscellaneous | none — browser storage | The reader, not a Gutenberg ebook — poems pasted in by hand |
 
 Choosing a collection swaps the poems, the page's titles and description, the

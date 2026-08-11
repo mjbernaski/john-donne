@@ -96,6 +96,25 @@
       "readerProfile": "A classically trained actor performing a soliloquy, intimate and unforced, thinking the words rather than declaiming them."
     },
     {
+      "id": "shakespeare-complete",
+      "name": "Shakespeare · Complete",
+      "title": "The Complete Works of William Shakespeare",
+      "subtitle": "Plays and poems from Project Gutenberg",
+      "description": "The complete Project Gutenberg Shakespeare corpus: thirty-eight plays, 154 sonnets, and the longer poems, arranged as individual sonnets, scenes, and works for comfortable reading and searching.",
+      "poems": "poems-shakespeare-complete.json",
+      "companionLabel": "Shakespeare companion",
+      "chatContext": "William Shakespeare · Complete Works · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/ebooks/100",
+      "sourceNote": "The Complete Works of William Shakespeare, Project Gutenberg ebook 100",
+      "stripEditorialApparatus": false,
+      "poet": "William Shakespeare",
+      "authorProfile": "William Shakespeare (1564–1616), English playwright and poet. This collection contains both dramatic and nondramatic writing. For a play scene, distinguish every character's speech from Shakespeare's own opinions and attend to the scene's dramatic situation. For a sonnet or narrative poem, attend to its speaker, form, argument, imagery, and place within the larger work.",
+      "sourceProfile": "The Complete Works of William Shakespeare, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/100. Plays are divided into front matter and scenes for this interface; sonnets are individual entries and the remaining poems are kept whole. The wording, spelling, and work order follow the source edition.",
+      "readingNotes": "Read dramatic scenes as living dialogue, differentiating characters naturally without caricature. Read poems with attention to argument, metre, and shifts of address. Sustain the verse line without singsong, and let pauses follow the thought rather than every line ending. Keep archaic elisions as written.",
+      "readingScene": "A spare Elizabethan stage with warm live acoustics and an attentive audience.",
+      "readerProfile": "A classically trained Shakespearean actor reading plays and poems with clarity, intimacy, and dramatic intelligence."
+    },
+    {
       "id": "miscellaneous",
       "name": "Miscellaneous",
       "title": "Miscellaneous",
