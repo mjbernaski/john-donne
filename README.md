@@ -227,7 +227,7 @@ address and port:
 {
   "server": { "host": "0.0.0.0", "port": 8888 },
   "upstreams": {
-    "flux": "http://192.168.5.40:2222",
+    "flux": "http://192.168.6.40:2222",
     "vllm": "http://192.168.5.40:8899"
   }
 }

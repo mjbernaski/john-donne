@@ -3,7 +3,6 @@ let allPoems = [];
 let filteredPoems = [];
 const poemChatSessions = new WeakMap();
 const CHAT_PROXY_URL = '/api/chat';
-const FALLBACK_MODEL = 'unsloth/gemma-4-26B-A4B-it-NVFP4';
 const FLUX_PROXY_URL = '/api/flux';
 const CHAT_STORAGE_PREFIX = 'john-donne-poem-session-v1:';
 const RECENT_POEMS_STORAGE = 'john-donne-recent-poems-v1';
@@ -854,7 +853,9 @@ function loadStoredPoemSession(poem) {
                     ['user', 'assistant'].includes(message?.role) && typeof message.content === 'string'
                 ))
                 : [],
-            model: typeof stored.model === 'string' ? stored.model : null,
+            // Model IDs belong to the current upstream deployment, not to a
+            // saved conversation. Discover it again whenever the page loads.
+            model: null,
             images: Array.isArray(stored.images)
                 ? stored.images
                     .filter(image => (
@@ -886,7 +887,6 @@ function savePoemSession(poem, session) {
         localStorage.setItem(getPoemStorageKey(poem), JSON.stringify({
             version: 1,
             id: session.id,
-            model: session.model,
             context: {
                 poemTitle: poem.title,
                 book: currentBook.id,
@@ -1093,7 +1093,9 @@ async function resolveModel(session) {
             .then(async response => {
                 if (!response.ok) throw new Error(`Model discovery failed (${response.status})`);
                 const payload = await response.json();
-                return payload.data?.[0]?.id || FALLBACK_MODEL;
+                const model = payload.data?.[0]?.id;
+                if (!model) throw new Error('The model server reported no available models.');
+                return model;
             })
             .catch(error => {
                 modelRequest = null;
