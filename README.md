@@ -341,17 +341,23 @@ single WAV player. The feminine option uses the mature Gacrux voice; the
 masculine option uses the smooth Algieba voice. Each completed model response
 also has its own listen control using the distinct, clear Iapetus voice. The
 WAV performances are stored in IndexedDB and automatically reused for the same
-poem, selected voice, or saved model response on later visits.
+poem, selected voice, or saved model response on later visits. Poem readings are
+also kept in the server's ignored `audio-library/` directory under a stable hash
+of the text, voice, model, and collection. The narration panel checks that shared
+library automatically, so another browser or device can use an existing reading
+without sending the poem to Gemini again.
 
-The server also keeps the last few readings it generated — eight at most, oldest
-discarded — and serves each from a path ending in a real filename, along the
+The server also keeps the last few readings in memory and poem performances
+persistently on disk. It serves each from a path ending in a real filename, along the
 lines of `Poet - Poem - Gacrux.wav`. The player loads that path in preference to
 a blob URL, purely so that the browser's own audio-player download menu names
 the file properly: a blob URL saves as `download.wav` whatever the page asks for.
 That handler answers HTTP byte-range requests, because Safari will not play media
 that cannot. A reading restored from browser storage on a later visit has no
 server copy behind it and falls back to a blob URL; the explicit **Download**
-link beside the player still names it correctly in either case.
+link beside the player still names it correctly in either case. That explicit link
+uses an HTTP attachment response as well as the HTML download hint, which works on
+mobile Safari and other platforms that ignore the hint alone.
 
 ### Parsing Poems
 

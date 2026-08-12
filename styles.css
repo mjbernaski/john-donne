@@ -1361,6 +1361,8 @@ body {
 
 .chat-controls {
     display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 14px;
 }
@@ -1445,6 +1447,51 @@ body {
     opacity: 0.45;
     text-decoration: none;
 }
+
+.chat-history {
+    flex: 0 0 auto;
+    max-height: 230px;
+    overflow-y: auto;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+    background: #fffaf2;
+}
+
+.chat-history[hidden] { display: none; }
+
+.chat-history-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.chat-history-heading strong { color: var(--primary-color); font-size: 0.78rem; }
+.chat-history-heading span { color: var(--text-light); font-size: 0.66rem; }
+
+.chat-history-list { display: grid; gap: 7px; }
+
+.chat-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: white;
+}
+
+.chat-history-item--active { border-color: rgba(139, 69, 19, 0.45); }
+.chat-history-item > div:first-child { min-width: 0; }
+.chat-history-item strong, .chat-history-item span { display: block; }
+.chat-history-item strong { overflow: hidden; color: var(--primary-color); font: 600 0.78rem/1.3 var(--font-serif); text-overflow: ellipsis; white-space: nowrap; }
+.chat-history-item span { margin-top: 2px; color: var(--text-light); font-size: 0.6rem; }
+.chat-history-item > div:last-child { display: flex; flex: 0 0 auto; gap: 5px; }
+.chat-history-item button { padding: 4px 7px; border: 1px solid var(--border-color); border-radius: 6px; background: white; color: var(--secondary-color); cursor: pointer; font: 600 0.62rem/1.2 var(--font-sans); }
+.chat-history-item button:hover:not(:disabled) { border-color: var(--secondary-color); }
+.chat-history-item button:disabled { color: var(--text-light); cursor: default; opacity: 0.65; }
 
 .chat-messages {
     flex: 1 1 auto;

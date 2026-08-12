@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import io
 import json
 import os
@@ -79,6 +80,8 @@ CHAT_TIMEOUT = 300
 AUDIO_CACHE: "OrderedDict[str, tuple[str, bytes]]" = OrderedDict()
 AUDIO_CACHE_LIMIT = 8
 SAFE_FILENAME = re.compile(r"[^A-Za-z0-9 ,._'()\[\]-]+")
+AUDIO_LIBRARY_PATH = BASE_DIR / "audio-library"
+AUDIO_LIBRARY_LOCK = threading.Lock()
 # The Miscellaneous shelf lives here rather than in one browser, so every reader
 # of this server sees the same poems.
 USER_POEMS_PATH = BASE_DIR / "user-poems.json"
@@ -102,22 +105,55 @@ def write_user_poems(poems: list[dict]) -> None:
     temporary.replace(USER_POEMS_PATH)
 
 
-def cache_audio(filename: str, audio: bytes) -> str:
-    """Store one reading under a token and return the path that serves it."""
+def audio_library_key(title: str, text: str, voice: str, kind: str, book_id: str) -> str:
+    """Identify the exact performance request across browsers and server restarts."""
+    identity = json.dumps(
+        {
+            "model": GEMINI_TTS_MODEL,
+            "title": title,
+            "text": text,
+            "voice": voice,
+            "kind": kind,
+            "book": book_id,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+def cache_audio(filename: str, audio: bytes, key: str | None = None) -> str:
+    """Persist one reading and return a stable, human-named media path."""
     name = SAFE_FILENAME.sub(" ", filename).strip().strip(".")
     name = re.sub(r"\s+", " ", name)[:120] or "reading"
     if not name.lower().endswith(".wav"):
         name += ".wav"
 
-    token = secrets.token_urlsafe(9)
+    token = key or secrets.token_urlsafe(9)
     AUDIO_CACHE[token] = (name, audio)
     while len(AUDIO_CACHE) > AUDIO_CACHE_LIMIT:
         AUDIO_CACHE.popitem(last=False)
+    if key:
+        AUDIO_LIBRARY_PATH.mkdir(exist_ok=True)
+        temporary = AUDIO_LIBRARY_PATH / f"{key}.tmp"
+        with AUDIO_LIBRARY_LOCK:
+            temporary.write_bytes(audio)
+            temporary.replace(AUDIO_LIBRARY_PATH / f"{key}.wav")
+            (AUDIO_LIBRARY_PATH / f"{key}.json").write_text(
+                json.dumps({"filename": name}, ensure_ascii=False), encoding="utf-8"
+            )
     return f"/api/tts/audio/{token}/{quote(name)}"
 
 
 class PoetryRequestHandler(SimpleHTTPRequestHandler):
     """Static-file handler with small, allow-listed FLUX and model reverse proxies."""
+
+    def do_HEAD(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path.startswith("/api/tts/audio/"):
+            self._serve_cached_audio()
+            return
+        super().do_HEAD()
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path.startswith("/api/flux/"):
@@ -236,9 +272,20 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def _serve_cached_audio(self) -> None:
-        parts = unquote(self.path.split("?", 1)[0]).split("/")
+        request_path, _, query = self.path.partition("?")
+        parts = unquote(request_path).split("/")
         token = parts[4] if len(parts) > 4 else ""
         entry = AUDIO_CACHE.get(token)
+        if not entry and re.fullmatch(r"[0-9a-f]{64}", token):
+            audio_file = AUDIO_LIBRARY_PATH / f"{token}.wav"
+            metadata_file = AUDIO_LIBRARY_PATH / f"{token}.json"
+            if audio_file.exists():
+                try:
+                    metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+                except (FileNotFoundError, json.JSONDecodeError):
+                    metadata = {}
+                entry = (str(metadata.get("filename") or "reading.wav"), audio_file.read_bytes())
+                AUDIO_CACHE[token] = entry
         if not entry:
             self.send_error(404, "That reading is no longer cached")
             return
@@ -262,7 +309,8 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "audio/wav")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Content-Disposition", f'inline; filename="{name}"')
+        disposition = "attachment" if "download=1" in query.split("&") else "inline"
+        self.send_header("Content-Disposition", f'{disposition}; filename="{name}"')
         self.send_header("Cache-Control", "no-store")
         if match:
             self.send_header("Content-Range", f"bytes {start}-{end}/{len(audio)}")
@@ -273,6 +321,9 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/api/tts":
             self._generate_tts()
+            return
+        if self.path == "/api/tts/lookup":
+            self._lookup_tts()
             return
         if self.path == "/api/poems":
             self._add_user_poem()
@@ -293,24 +344,62 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             return
         self.send_error(405, "POST is only supported for the proxies and Gemini TTS")
 
-    def _generate_tts(self) -> None:
-        api_key = GEMINI_API_KEY or self.headers.get("X-Gemini-API-Key", "")
-        if not api_key:
-            self._send_json(401, {"error": "A Gemini API key is required."})
-            return
+    def _tts_request(self, payload: dict) -> tuple[str, str, str, str, dict, str, str]:
+        title = str(payload.get("title", "")).strip()
+        text = str(payload.get("text", "")).strip()
+        voice_id = str(payload.get("voice", ""))
+        voice = TTS_VOICES.get(voice_id)
+        kind = str(payload.get("kind", "poem"))
+        if not title or not text or not voice or kind not in {"poem", "response"}:
+            raise ValueError("title, text, kind, and a supported voice are required.")
+        book = self._resolve_book(payload.get("book"))
+        book_id = str(book.get("id") or payload.get("book") or "")
+        key = audio_library_key(title, text, voice_id, kind, book_id)
+        filename = str(payload.get("filename", "")) or title
+        return title, text, voice_id, kind, book, key, filename
 
+    def _library_audio(self, key: str, filename: str) -> tuple[bytes, str] | None:
+        audio_file = AUDIO_LIBRARY_PATH / f"{key}.wav"
+        if not audio_file.exists():
+            return None
+        audio = audio_file.read_bytes()
+        return audio, cache_audio(filename, audio, key)
+
+    def _send_tts_audio(self, audio: bytes, audio_path: str, reused: bool) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/wav")
+        self.send_header("Content-Length", str(len(audio)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Audio-Path", audio_path)
+        self.send_header("X-Audio-Reused", "true" if reused else "false")
+        self.end_headers()
+        self.wfile.write(audio)
+
+    def _lookup_tts(self) -> None:
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length) or b"{}")
-            title = str(payload.get("title", "")).strip()
-            text = str(payload.get("text", "")).strip()
-            voice = TTS_VOICES.get(str(payload.get("voice", "")))
-            kind = str(payload.get("kind", "poem"))
-            if not title or not text or not voice or kind not in {"poem", "response"}:
-                self._send_json(400, {"error": "title, text, kind, and a supported voice are required."})
+            payload = self._read_json_body()
+            *_, key, filename = self._tts_request(payload)
+            existing = self._library_audio(key, filename)
+            if not existing:
+                self._send_json(404, {"error": "No saved reading exists."})
                 return
+            self._send_tts_audio(*existing, reused=True)
+        except (ValueError, json.JSONDecodeError) as error:
+            self._send_json(400, {"error": str(error)})
 
-            book = self._resolve_book(payload.get("book"))
+    def _generate_tts(self) -> None:
+        try:
+            payload = self._read_json_body()
+            title, text, voice_id, kind, book, key, filename = self._tts_request(payload)
+            existing = self._library_audio(key, filename)
+            if existing:
+                self._send_tts_audio(*existing, reused=True)
+                return
+            api_key = GEMINI_API_KEY or self.headers.get("X-Gemini-API-Key", "")
+            if not api_key:
+                self._send_json(401, {"error": "A Gemini API key is required."})
+                return
+            voice = TTS_VOICES[voice_id]
             pcm_chunks = []
             chunks = self._split_tts_text(text)
             for index, chunk in enumerate(chunks):
@@ -325,15 +414,8 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 wav_file.setframerate(24000)
                 wav_file.writeframes(b"".join(pcm_chunks))
             audio = audio_buffer.getvalue()
-            audio_path = cache_audio(str(payload.get("filename", "")) or title, audio)
-            self.send_response(200)
-            self.send_header("Content-Type", "audio/wav")
-            self.send_header("Content-Length", str(len(audio)))
-            self.send_header("Cache-Control", "no-store")
-            # The player loads this path so its own download menu sees a filename.
-            self.send_header("X-Audio-Path", audio_path)
-            self.end_headers()
-            self.wfile.write(audio)
+            audio_path = cache_audio(filename, audio, key)
+            self._send_tts_audio(audio, audio_path, reused=False)
         except (ValueError, json.JSONDecodeError) as error:
             self._send_json(400, {"error": str(error)})
         except HTTPError as error:

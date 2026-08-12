@@ -184,9 +184,18 @@
                                         <span class="chat-toggle-text">Read replies</span>
                                     </label>
                                     <button id="clearChat" class="chat-clear" type="button">New conversation</button>
+                                    <button id="toggleChatHistory" class="chat-clear" type="button" aria-expanded="false" aria-controls="chatHistory">History</button>
                                 </div>
                             </div>
                         </header>
+
+                        <section id="chatHistory" class="chat-history" aria-label="Conversation history" hidden>
+                            <div class="chat-history-heading">
+                                <strong>Conversations about this poem</strong>
+                                <span>Continue a thread or branch from any earlier point.</span>
+                            </div>
+                            <div id="chatHistoryList" class="chat-history-list"></div>
+                        </section>
 
                         <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
 
@@ -227,6 +236,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260811-19"></script>
+    <script src="app.js?v=20260811-20"></script>
 </body>
 </html>

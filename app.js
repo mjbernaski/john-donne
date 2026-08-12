@@ -71,6 +71,9 @@ const chatAttachment = document.getElementById('chatAttachment');
 const chatInput = document.getElementById('chatInput');
 const chatSend = document.getElementById('chatSend');
 const clearChat = document.getElementById('clearChat');
+const toggleChatHistory = document.getElementById('toggleChatHistory');
+const chatHistory = document.getElementById('chatHistory');
+const chatHistoryList = document.getElementById('chatHistoryList');
 const chatBrief = document.getElementById('chatBrief');
 const chatReadReplies = document.getElementById('chatReadReplies');
 const generateImages = document.getElementById('generateImages');
@@ -833,6 +836,11 @@ function setDownloadLink(link, url, filename) {
     link.hidden = false;
 }
 
+function downloadableAudioUrl(url) {
+    if (!url || !url.startsWith('/api/tts/audio/')) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}download=1`;
+}
+
 function getPoemAudioKey(poem, voice) {
     return `poem:${stableHash(`${poem.title}\n${poem.content}`)}:${voice}`;
 }
@@ -846,16 +854,15 @@ function loadStoredPoemSession(poem) {
     try {
         const stored = JSON.parse(localStorage.getItem(getPoemStorageKey(poem)) || 'null');
         if (!stored || stored.context?.poemTitle !== poem.title) return null;
-        return {
+        const legacyConversation = {
             id: typeof stored.id === 'string' ? stored.id : createSessionId(),
             messages: Array.isArray(stored.messages)
                 ? stored.messages.filter(message => (
-                    ['user', 'assistant'].includes(message?.role) && typeof message.content === 'string'
+                    ['user', 'assistant'].includes(message?.role) && isStoredMessageContent(message.content)
                 ))
                 : [],
             // Model IDs belong to the current upstream deployment, not to a
             // saved conversation. Discover it again whenever the page loads.
-            model: null,
             images: Array.isArray(stored.images)
                 ? stored.images
                     .filter(image => (
@@ -865,6 +872,19 @@ function loadStoredPoemSession(poem) {
                         && (!['queued', 'generating'].includes(image.status) || image.jobId)
                     ))
                 : [],
+            parentId: stored.parentId || null,
+            createdAt: stored.createdAt || stored.updatedAt || new Date().toISOString(),
+            updatedAt: stored.updatedAt || new Date().toISOString()
+        };
+        const conversations = stored.version >= 2 && Array.isArray(stored.conversations)
+            ? stored.conversations.map(normalizeStoredConversation).filter(Boolean)
+            : [legacyConversation];
+        const activeId = stored.activeConversationId || legacyConversation.id;
+        const active = conversations.find(conversation => conversation.id === activeId) || conversations[0];
+        return {
+            ...active,
+            conversations: conversations.filter(conversation => conversation.id !== active.id),
+            model: null,
             loading: false,
             imagesLoading: false,
             imagePollActive: false,
@@ -882,19 +902,62 @@ function loadStoredPoemSession(poem) {
     }
 }
 
+function normalizeStoredConversation(conversation) {
+    if (!conversation || typeof conversation.id !== 'string') return null;
+    return {
+        id: conversation.id,
+        messages: Array.isArray(conversation.messages)
+            ? conversation.messages.filter(message => (
+                ['user', 'assistant'].includes(message?.role) && isStoredMessageContent(message.content)
+            ))
+            : [],
+        images: Array.isArray(conversation.images) ? conversation.images : [],
+        parentId: typeof conversation.parentId === 'string' ? conversation.parentId : null,
+        createdAt: conversation.createdAt || conversation.updatedAt || new Date().toISOString(),
+        updatedAt: conversation.updatedAt || conversation.createdAt || new Date().toISOString()
+    };
+}
+
+function isStoredMessageContent(content) {
+    if (typeof content === 'string') return true;
+    return Array.isArray(content) && content.every(part => (
+        part && (
+            (part.type === 'text' && typeof part.text === 'string')
+            || (part.type === 'image_url' && typeof part.image_url?.url === 'string')
+        )
+    ));
+}
+
+function snapshotConversation(session) {
+    return {
+        id: session.id,
+        messages: session.messages,
+        images: session.images,
+        parentId: session.parentId || null,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt || new Date().toISOString()
+    };
+}
+
+function allConversations(session) {
+    return [snapshotConversation(session), ...(session.conversations || [])]
+        .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
 function savePoemSession(poem, session) {
     try {
+        session.updatedAt = new Date().toISOString();
         localStorage.setItem(getPoemStorageKey(poem), JSON.stringify({
-            version: 1,
+            version: 2,
             id: session.id,
+            activeConversationId: session.id,
             context: {
                 poemTitle: poem.title,
                 book: currentBook.id,
                 author: currentBook.poet,
                 source: currentBook.sourceNote
             },
-            messages: session.messages,
-            images: session.images,
+            conversations: allConversations(session),
             updatedAt: new Date().toISOString()
         }));
     } catch (error) {
@@ -911,6 +974,10 @@ function getPoemChatSession(poem) {
             messages: [],
             model: null,
             images: [],
+            conversations: [],
+            parentId: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             loading: false,
             imagesLoading: false,
             imagePollActive: false,
@@ -1083,7 +1150,87 @@ function renderChatSession(session) {
     chatInput.disabled = session.loading;
     chatSend.disabled = session.loading;
     clearChat.disabled = session.loading;
+    toggleChatHistory.disabled = session.loading;
+    renderChatHistory(session);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function conversationTitle(conversation) {
+    const firstPrompt = conversation.messages.find(message => message.role === 'user');
+    const text = firstPrompt ? messageText(firstPrompt.content).replace(/\s+/g, ' ').trim() : '';
+    return text ? (text.length > 64 ? `${text.slice(0, 61)}…` : text) : 'New conversation';
+}
+
+function renderChatHistory(session) {
+    chatHistoryList.replaceChildren();
+    const conversations = allConversations(session);
+    const conversationsById = new Map(conversations.map(conversation => [conversation.id, conversation]));
+    conversations.forEach(conversation => {
+        const item = document.createElement('article');
+        item.className = 'chat-history-item';
+        if (conversation.id === session.id) item.classList.add('chat-history-item--active');
+
+        const copy = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = conversationTitle(conversation);
+        const meta = document.createElement('span');
+        const date = new Date(conversation.updatedAt);
+        const parent = conversationsById.get(conversation.parentId);
+        const branchNote = parent ? ` · branched from “${conversationTitle(parent)}”` : '';
+        meta.textContent = `${conversation.messages.length} message${conversation.messages.length === 1 ? '' : 's'} · ${date.toLocaleString()}${branchNote}`;
+        copy.append(title, meta);
+
+        const actions = document.createElement('div');
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.textContent = conversation.id === session.id ? 'Current' : 'Continue';
+        open.disabled = conversation.id === session.id;
+        open.addEventListener('click', () => activateConversation(conversation.id));
+        const branch = document.createElement('button');
+        branch.type = 'button';
+        branch.textContent = 'Branch';
+        branch.addEventListener('click', () => branchConversation(conversation.id));
+        actions.append(open, branch);
+        item.append(copy, actions);
+        chatHistoryList.appendChild(item);
+    });
+}
+
+function activateConversation(conversationId) {
+    const session = currentChatSession;
+    if (!session || session.loading || conversationId === session.id) return;
+    const target = session.conversations.find(item => item.id === conversationId);
+    if (!target) return;
+    session.conversations = [snapshotConversation(session), ...session.conversations.filter(item => item.id !== conversationId)];
+    Object.assign(session, target);
+    savePoemSession(currentPoem, session);
+    renderChatSession(session);
+    renderPoemImages(currentPoem, session);
+    reconcilePoemImageJobs(currentPoem, session);
+    chatHistory.hidden = true;
+    toggleChatHistory.setAttribute('aria-expanded', 'false');
+    chatInput.focus();
+}
+
+function branchConversation(conversationId) {
+    const session = currentChatSession;
+    if (!session || session.loading) return;
+    const source = allConversations(session).find(item => item.id === conversationId);
+    if (!source) return;
+    session.conversations = allConversations(session);
+    const now = new Date().toISOString();
+    session.id = createSessionId();
+    session.messages = source.messages.map(message => ({ ...message }));
+    session.images = [];
+    session.parentId = source.id;
+    session.createdAt = now;
+    session.updatedAt = now;
+    savePoemSession(currentPoem, session);
+    renderChatSession(session);
+    renderPoemImages(currentPoem, session);
+    chatHistory.hidden = true;
+    toggleChatHistory.setAttribute('aria-expanded', 'false');
+    chatInput.focus();
 }
 
 async function resolveModel(session) {
@@ -1254,12 +1401,19 @@ async function sendChatMessage(event) {
 function clearCurrentChat() {
     if (!currentChatSession) return;
     if (currentChatSession.abortController) currentChatSession.abortController.abort();
+    currentChatSession.conversations = allConversations(currentChatSession);
+    currentChatSession.id = createSessionId();
     currentChatSession.messages = [];
+    currentChatSession.images = [];
+    currentChatSession.parentId = null;
+    currentChatSession.createdAt = new Date().toISOString();
+    currentChatSession.updatedAt = currentChatSession.createdAt;
     currentChatSession.pendingAttachment = null;
     currentChatSession.loading = false;
     currentChatSession.abortController = null;
     savePoemSession(currentPoem, currentChatSession);
     renderChatSession(currentChatSession);
+    renderPoemImages(currentPoem, currentChatSession);
     setChatStatus(
         currentChatSession.model ? `Ready · ${currentChatSession.model.split('/').pop()}` : 'Connecting to model…',
         currentChatSession.model ? 'ready' : 'connecting'
@@ -2013,11 +2167,11 @@ function setPoemAudioStatus(message, state = '') {
     poemAudioStatus.dataset.state = state;
 }
 
-async function requestGeminiTts(title, text, voice, kind = 'poem', filename = '') {
+async function requestGeminiTts(title, text, voice, kind = 'poem', filename = '', lookupOnly = false) {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     const apiKey = getGeminiApiKey();
     if (apiKey) headers.set('X-Gemini-API-Key', apiKey);
-    const response = await fetch('/api/tts', {
+    const response = await fetch(lookupOnly ? '/api/tts/lookup' : '/api/tts', {
         method: 'POST',
         headers,
         body: JSON.stringify({ title, text, voice, kind, book: currentBook.id, filename })
@@ -2026,12 +2180,14 @@ async function requestGeminiTts(title, text, voice, kind = 'poem', filename = ''
         geminiKeySetup.hidden = false;
         throw new Error('A Gemini API key is required or was rejected.');
     }
+    if (lookupOnly && response.status === 404) return null;
     if (!response.ok) throw new Error(await getApiError(response));
     // The server also parks the reading at a named path, so the browser's own
     // player menu downloads it as a title rather than as "download.wav".
     return {
         blob: await response.blob(),
-        namedPath: response.headers.get('X-Audio-Path') || ''
+        namedPath: response.headers.get('X-Audio-Path') || '',
+        reused: response.headers.get('X-Audio-Reused') === 'true'
     };
 }
 
@@ -2102,7 +2258,7 @@ function addChatListenControl(messageElement, content, session, autoPlay = false
         if (cachedAudio) {
             player.src = cachedAudio;
             player.hidden = false;
-            setDownloadLink(download, cachedAudio, downloadName);
+            setDownloadLink(download, downloadableAudioUrl(cachedAudio), downloadName);
             player.play().catch(() => {});
             return;
         }
@@ -2118,7 +2274,7 @@ function addChatListenControl(messageElement, content, session, autoPlay = false
             session.responseAudioByText.set(content, playbackUrl);
             player.src = playbackUrl;
             player.hidden = false;
-            setDownloadLink(download, playbackUrl, downloadName);
+            setDownloadLink(download, downloadableAudioUrl(playbackUrl), downloadName);
             listenButton.textContent = 'Play again · Iapetus';
             pendingGeminiRetry = null;
             player.play().catch(() => {});
@@ -2140,9 +2296,23 @@ async function restorePoemAudio(poem, session, voice) {
     if (session.audioRestoringVoices.has(voice)) return;
     session.audioRestoringVoices.add(voice);
     try {
-        const storedBlob = await getStoredAudio(getPoemAudioKey(poem, voice));
+        const audioKey = getPoemAudioKey(poem, voice);
+        const storedBlob = await getStoredAudio(audioKey);
         if (storedBlob && !session.audioByVoice.has(voice)) {
             session.audioByVoice.set(voice, URL.createObjectURL(storedBlob));
+        } else if (!storedBlob && !session.audioByVoice.has(voice)) {
+            const downloadName = buildDownloadName(poem, [VOICE_NAMES[voice] || voice], 'wav');
+            const existing = await requestGeminiTts(
+                poem.title, getReadablePoemText(poem), voice, 'poem', downloadName, true
+            );
+            if (existing) {
+                await storeAudio(audioKey, existing.blob, {
+                    kind: 'poem',
+                    poemTitle: poem.title,
+                    voice
+                });
+                session.audioByVoice.set(voice, existing.namedPath || URL.createObjectURL(existing.blob));
+            }
         }
     } finally {
         session.audioCheckedVoices.add(voice);
@@ -2162,7 +2332,7 @@ function renderPoemAudio(session) {
         poemAudioPlayer.hidden = false;
         setDownloadLink(
             downloadAudio,
-            cachedAudio,
+            downloadableAudioUrl(cachedAudio),
             buildDownloadName(currentPoem, [VOICE_NAMES[voice] || voice], 'wav')
         );
         generateAudio.textContent = 'Play reading';
@@ -2177,7 +2347,7 @@ function renderPoemAudio(session) {
         setDownloadLink(downloadAudio, '', '');
         if (!session.audioCheckedVoices.has(voice)) {
             generateAudio.textContent = 'Checking saved reading…';
-            setPoemAudioStatus('Looking for an earlier performance in this browser…', 'working');
+            setPoemAudioStatus('Looking for an earlier performance in this browser and the shared library…', 'working');
             generateAudio.disabled = true;
             poemVoice.disabled = session.audioLoading;
             if (!session.audioRestoringVoices.has(voice)) {
@@ -2231,7 +2401,7 @@ async function generatePoemReading() {
         session.audioByVoice.set(voice, playbackUrl);
         poemAudioPlayer.src = playbackUrl;
         poemAudioPlayer.hidden = false;
-        setDownloadLink(downloadAudio, playbackUrl, downloadName);
+        setDownloadLink(downloadAudio, downloadableAudioUrl(playbackUrl), downloadName);
         setPoemAudioStatus(
             saved
                 ? 'Reading ready and saved for future visits. Use the player to pause, seek, or replay.'
@@ -2274,6 +2444,8 @@ function openPoemModal(poem) {
     recordPoemVisit(poem);
     currentPoem = poem;
     currentChatSession = getPoemChatSession(poem);
+    chatHistory.hidden = true;
+    toggleChatHistory.setAttribute('aria-expanded', 'false');
     modalTitle.textContent = poem.title;
     renderPoemContent(poem.content, poem.title);
     renderChatSession(currentChatSession);
@@ -2289,6 +2461,8 @@ function openPoemModal(poem) {
 // Close poem modal
 function closePoemModal() {
     poemAudioPlayer.pause();
+    chatHistory.hidden = true;
+    toggleChatHistory.setAttribute('aria-expanded', 'false');
     poemModal.classList.remove('show');
     document.body.style.overflow = 'auto';
 }
@@ -2353,6 +2527,11 @@ randomPoem.addEventListener('click', openRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
 chatForm.addEventListener('submit', sendChatMessage);
 clearChat.addEventListener('click', clearCurrentChat);
+toggleChatHistory.addEventListener('click', () => {
+    chatHistory.hidden = !chatHistory.hidden;
+    toggleChatHistory.setAttribute('aria-expanded', String(!chatHistory.hidden));
+    if (!chatHistory.hidden && currentChatSession) renderChatHistory(currentChatSession);
+});
 chatBrief.addEventListener('change', saveChatToggles);
 chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
