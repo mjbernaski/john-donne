@@ -11,6 +11,7 @@ const IMAGE_STYLES_STORAGE = 'john-donne-image-styles';
 const IMAGE_STEER_STORAGE = 'john-donne-image-steer';
 const USER_POEMS_STORAGE = 'john-donne-user-poems';
 const VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
+const POEM_VOICES = ['feminine', 'masculine'];
 let selectedStyleLabels = new Set();
 let editingPoem = null;
 const RECENT_POEMS_LIMIT = 8;
@@ -64,6 +65,8 @@ const poemModal = document.getElementById('poemModal');
 const modalTitle = document.getElementById('modalTitle');
 const modalContent = document.getElementById('modalContent');
 const closeModal = document.getElementById('closeModal');
+const modalContentElement = poemModal.querySelector('.modal-content');
+const mobileModalTabs = [...document.querySelectorAll('.mobile-modal-tab')];
 const chatStatus = document.getElementById('chatStatus');
 const chatMessages = document.getElementById('chatMessages');
 const chatForm = document.getElementById('chatForm');
@@ -850,6 +853,25 @@ function getResponseAudioKey(poem, content) {
     return `response:${poemHash}:${stableHash(content)}`;
 }
 
+function imageIdentity(image) {
+    return image?.filename || image?.jobId || `${image?.style || ''}\n${image?.prompt || ''}`;
+}
+
+// Images belong to the poem, not to the chat branch that happened to create
+// them. Preserve their original order while folding older branch-scoped data
+// into the poem-level gallery.
+function mergePoemImages(...collections) {
+    const seen = new Set();
+    return collections.flat().filter(image => {
+        if (!image || typeof image.prompt !== 'string' || image.status === 'error') return false;
+        if (['queued', 'generating'].includes(image.status) && !image.jobId) return false;
+        const identity = imageIdentity(image);
+        if (seen.has(identity)) return false;
+        seen.add(identity);
+        return true;
+    });
+}
+
 function loadStoredPoemSession(poem) {
     try {
         const stored = JSON.parse(localStorage.getItem(getPoemStorageKey(poem)) || 'null');
@@ -881,8 +903,13 @@ function loadStoredPoemSession(poem) {
             : [legacyConversation];
         const activeId = stored.activeConversationId || legacyConversation.id;
         const active = conversations.find(conversation => conversation.id === activeId) || conversations[0];
+        const poemImages = mergePoemImages(
+            Array.isArray(stored.media?.images) ? stored.media.images : [],
+            conversations.flatMap(conversation => conversation.images || [])
+        );
         return {
             ...active,
+            images: poemImages,
             conversations: conversations.filter(conversation => conversation.id !== active.id),
             model: null,
             loading: false,
@@ -948,7 +975,7 @@ function savePoemSession(poem, session) {
     try {
         session.updatedAt = new Date().toISOString();
         localStorage.setItem(getPoemStorageKey(poem), JSON.stringify({
-            version: 2,
+            version: 3,
             id: session.id,
             activeConversationId: session.id,
             context: {
@@ -957,6 +984,7 @@ function savePoemSession(poem, session) {
                 author: currentBook.poet,
                 source: currentBook.sourceNote
             },
+            media: { images: session.images },
             conversations: allConversations(session),
             updatedAt: new Date().toISOString()
         }));
@@ -1201,8 +1229,14 @@ function activateConversation(conversationId) {
     if (!session || session.loading || conversationId === session.id) return;
     const target = session.conversations.find(item => item.id === conversationId);
     if (!target) return;
+    const poemImages = mergePoemImages(
+        session.images,
+        target.images || [],
+        session.conversations.flatMap(conversation => conversation.images || [])
+    );
     session.conversations = [snapshotConversation(session), ...session.conversations.filter(item => item.id !== conversationId)];
     Object.assign(session, target);
+    session.images = poemImages;
     savePoemSession(currentPoem, session);
     renderChatSession(session);
     renderPoemImages(currentPoem, session);
@@ -1221,7 +1255,7 @@ function branchConversation(conversationId) {
     const now = new Date().toISOString();
     session.id = createSessionId();
     session.messages = source.messages.map(message => ({ ...message }));
-    session.images = [];
+    session.images = mergePoemImages(session.images, source.images || []);
     session.parentId = source.id;
     session.createdAt = now;
     session.updatedAt = now;
@@ -1404,7 +1438,10 @@ function clearCurrentChat() {
     currentChatSession.conversations = allConversations(currentChatSession);
     currentChatSession.id = createSessionId();
     currentChatSession.messages = [];
-    currentChatSession.images = [];
+    currentChatSession.images = mergePoemImages(
+        currentChatSession.images,
+        currentChatSession.conversations.flatMap(conversation => conversation.images || [])
+    );
     currentChatSession.parentId = null;
     currentChatSession.createdAt = new Date().toISOString();
     currentChatSession.updatedAt = currentChatSession.createdAt;
@@ -2317,15 +2354,28 @@ async function restorePoemAudio(poem, session, voice) {
     } finally {
         session.audioCheckedVoices.add(voice);
         session.audioRestoringVoices.delete(voice);
-        if (currentPoem === poem && currentChatSession === session && poemVoice.value === voice) {
-            renderPoemAudio(session);
+        if (currentPoem === poem && currentChatSession === session) {
+            updatePoemVoiceOptions(session);
+            if (poemVoice.value === voice) renderPoemAudio(session);
         }
     }
+}
+
+function updatePoemVoiceOptions(session) {
+    const labels = {
+        feminine: 'Feminine · mature',
+        masculine: 'Masculine · smooth'
+    };
+    Array.from(poemVoice.options).forEach(option => {
+        const saved = session.audioByVoice.has(option.value) ? ' · reading saved' : '';
+        option.textContent = `${labels[option.value] || option.value}${saved}`;
+    });
 }
 
 function renderPoemAudio(session) {
     const voice = poemVoice.value;
     const cachedAudio = session.audioByVoice.get(voice);
+    updatePoemVoiceOptions(session);
     poemAudioPlayer.pause();
     if (cachedAudio) {
         poemAudioPlayer.src = cachedAudio;
@@ -2351,7 +2401,9 @@ function renderPoemAudio(session) {
             generateAudio.disabled = true;
             poemVoice.disabled = session.audioLoading;
             if (!session.audioRestoringVoices.has(voice)) {
-                restorePoemAudio(currentPoem, session, voice);
+                restorePoemAudio(currentPoem, session, voice).catch(error => {
+                    console.warn(`Could not check the saved ${voice} reading:`, error);
+                });
             }
             return;
         }
@@ -2439,6 +2491,22 @@ function saveGeminiKey() {
     }
 }
 
+function setMobileModalTab(tabName, focusTab = false) {
+    const nextTab = ['read', 'visualize', 'discuss'].includes(tabName) ? tabName : 'read';
+    modalContentElement.dataset.mobileTab = nextTab;
+    document.getElementById('poemPanel').setAttribute(
+        'aria-labelledby',
+        nextTab === 'visualize' ? 'visualizeTab poemImagesTitle' : 'readTab modalTitle'
+    );
+    mobileModalTabs.forEach(tab => {
+        const isActive = tab.dataset.mobileTab === nextTab;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+        tab.tabIndex = isActive ? 0 : -1;
+        if (isActive && focusTab) tab.focus();
+    });
+}
+
 // Open poem modal
 function openPoemModal(poem) {
     recordPoemVisit(poem);
@@ -2451,11 +2519,24 @@ function openPoemModal(poem) {
     renderChatSession(currentChatSession);
     renderPoemImages(poem, currentChatSession);
     renderPoemAudio(currentChatSession);
+    setMobileModalTab('read');
+    // Check every offered performance up front so all previously generated
+    // readings appear as saved choices without requiring the reader to select
+    // each voice first.
+    POEM_VOICES.forEach(voice => {
+        if (!currentChatSession.audioCheckedVoices.has(voice)) {
+            restorePoemAudio(poem, currentChatSession, voice).catch(error => {
+                console.warn(`Could not check the saved ${voice} reading:`, error);
+            });
+        }
+    });
     poemModal.classList.add('show');
     document.body.style.overflow = 'hidden';
     connectChatSession(currentChatSession);
     reconcilePoemImageJobs(poem, currentChatSession);
-    window.setTimeout(() => chatInput.focus(), 100);
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+        window.setTimeout(() => chatInput.focus(), 100);
+    }
 }
 
 // Close poem modal
@@ -2525,6 +2606,16 @@ searchInput.addEventListener('input', handleSearch);
 clearSearch.addEventListener('click', handleClearSearch);
 randomPoem.addEventListener('click', openRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
+mobileModalTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => setMobileModalTab(tab.dataset.mobileTab));
+    tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const direction = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (index + direction + mobileModalTabs.length) % mobileModalTabs.length;
+        setMobileModalTab(mobileModalTabs[nextIndex].dataset.mobileTab, true);
+    });
+});
 chatForm.addEventListener('submit', sendChatMessage);
 clearChat.addEventListener('click', clearCurrentChat);
 toggleChatHistory.addEventListener('click', () => {

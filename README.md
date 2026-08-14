@@ -11,6 +11,7 @@ collections from the same interface.
 - **376 Whitman Poems**: The complete 1891-92 arrangement of *Leaves of Grass*
 - **Baudelaire in Two Translations**: 68 pieces from the Huneker edition and 54 from Cyril Scott's verse rendering, kept apart so the same poem can be read in both hands
 - **Two Shakespeare Collections**: 41 selected soliloquies and, separately, the complete plays and poems arranged for reading by scene or individual poem
+- **Complete Shelley**: 312 reading entries from the three-volume Hutchinson Oxford edition, with long works divided by act or canto
 - **A Shelf of Your Own**: Paste any poem into the Miscellaneous collection and it gains the same companion, images, and narration as the rest
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
@@ -44,17 +45,19 @@ collections from the same interface.
 - `poems-baudelaire-scott.json` - Parsed Cyril Scott translation of *The Flowers of Evil* (54 poems)
 - `poems-shakespeare.json` - A curated collection of 41 Shakespeare soliloquies
 - `poems-shakespeare-complete.json` - The complete Shakespeare corpus, divided into sonnets, play front matter, scenes, and long poems
+- `poems-shelley.json` - Shelley's complete poetical works, arranged as poems, fragments, acts, and cantos (312 entries)
 - `parse_poems.py` - Python script to parse the Donne text from Project Gutenberg source
 - `parse_whitman.py` - Python script to parse *Leaves of Grass* from Project Gutenberg source
 - `parse_baudelaire.py` - Python script to parse the Huneker Baudelaire edition from Project Gutenberg source
 - `parse_baudelaire_scott.py` - Python script to parse the Cyril Scott translation from Project Gutenberg plain text
 - `parse_shakespeare.py` - Python script to extract the curated soliloquies
 - `parse_shakespeare_complete.py` - Python script to transform the complete corpus JSON from `mjbernaski/shakespeare`
+- `parse_shelley.py` - Python script to extract the Shelley collection from Gutenberg ebook 4800 plain text
 
 ## Collections
 
 The site does not hard-code a single poet. On load it reads `books.json` and
-builds a switcher in the header from it. Today seven collections are listed:
+builds a switcher in the header from it. Today eight collections are listed:
 
 | Collection | Poems file | Source |
 | --- | --- | --- |
@@ -64,6 +67,7 @@ builds a switcher in the header from it. Today seven collections are listed:
 | Baudelaire · Scott | `poems-baudelaire-scott.json` | Cyril Scott translation, 1909 — Gutenberg ebook 36098 — 54 poems |
 | Shakespeare's Soliloquies | `poems-shakespeare.json` | Gutenberg ebook 100 — 41 selected speeches |
 | Shakespeare · Complete | `poems-shakespeare-complete.json` | Gutenberg ebook 100 — complete corpus arranged by sonnet, scene, and long poem |
+| The Complete Poetical Works of Percy Bysshe Shelley | `poems-shelley.json` | Hutchinson Oxford edition, 1914 — Gutenberg ebook 4800 — 312 entries |
 | Miscellaneous | none — browser storage | The reader, not a Gutenberg ebook — poems pasted in by hand |
 
 Choosing a collection swaps the poems, the page's titles and description, the
@@ -308,8 +312,9 @@ messages; downscaled, an image costs roughly 230 KB of base64 and about 350
 prompt tokens.
 
 Short poems receive one image, with progressively longer poems receiving up to
-five distinct visual interpretations. Conversation history and generated-image
-records are stored separately for each poem in browser storage.
+five distinct visual interpretations. Generated-image records are stored at the
+poem level in browser storage, so every completed image remains in the Visual
+Companions gallery when the reader switches, branches, or clears a chat.
 
 Which visual styles those interpretations use is now the reader's to decide. The
 Visual Companions panel lists all 24 styles, and any of them can be selected or
@@ -341,7 +346,10 @@ single WAV player. The feminine option uses the mature Gacrux voice; the
 masculine option uses the smooth Algieba voice. Each completed model response
 also has its own listen control using the distinct, clear Iapetus voice. The
 WAV performances are stored in IndexedDB and automatically reused for the same
-poem, selected voice, or saved model response on later visits. Poem readings are
+poem, voice, or saved model response on later visits. The narration panel checks
+both poem voices when it opens and marks every available performance in the
+voice selector, so feminine and masculine reads remain visible choices together.
+Poem readings are
 also kept in the server's ignored `audio-library/` directory under a stable hash
 of the text, voice, model, and collection. The narration panel checks that shared
 library automatically, so another browser or device can use an existing reading
