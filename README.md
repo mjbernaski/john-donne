@@ -312,8 +312,9 @@ messages; downscaled, an image costs roughly 230 KB of base64 and about 350
 prompt tokens.
 
 Short poems receive one image, with progressively longer poems receiving up to
-five distinct visual interpretations. Conversation history and generated-image
-records are stored separately for each poem in browser storage.
+five distinct visual interpretations. Generated-image records are stored at the
+poem level in browser storage, so every completed image remains in the Visual
+Companions gallery when the reader switches, branches, or clears a chat.
 
 Which visual styles those interpretations use is now the reader's to decide. The
 Visual Companions panel lists all 24 styles, and any of them can be selected or
@@ -345,7 +346,10 @@ single WAV player. The feminine option uses the mature Gacrux voice; the
 masculine option uses the smooth Algieba voice. Each completed model response
 also has its own listen control using the distinct, clear Iapetus voice. The
 WAV performances are stored in IndexedDB and automatically reused for the same
-poem, selected voice, or saved model response on later visits. Poem readings are
+poem, voice, or saved model response on later visits. The narration panel checks
+both poem voices when it opens and marks every available performance in the
+voice selector, so feminine and masculine reads remain visible choices together.
+Poem readings are
 also kept in the server's ignored `audio-library/` directory under a stable hash
 of the text, voice, model, and collection. The narration panel checks that shared
 library automatically, so another browser or device can use an existing reading
