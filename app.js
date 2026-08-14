@@ -92,6 +92,7 @@ const poemImagesStatus = document.getElementById('poemImagesStatus');
 const poemImagesGrid = document.getElementById('poemImagesGrid');
 const poemVoice = document.getElementById('poemVoice');
 const generateAudio = document.getElementById('generateAudio');
+const playSavedAudio = document.getElementById('playSavedAudio');
 const followReading = document.getElementById('followReading');
 const geminiKeySetup = document.getElementById('geminiKeySetup');
 const geminiApiKey = document.getElementById('geminiApiKey');
@@ -103,6 +104,7 @@ const audioTimeRemaining = document.getElementById('audioTimeRemaining');
 const audioTimeRemainingValue = document.getElementById('audioTimeRemainingValue');
 let activeTimedAudio = null;
 let audioRemainingFrame = null;
+let readingFollowFrame = null;
 
 function formatAudioTime(seconds) {
     const wholeSeconds = Math.max(0, Math.ceil(seconds));
@@ -819,8 +821,31 @@ function renderPoemContent(content, title) {
 }
 
 function clearReadingPosition() {
+    if (readingFollowFrame !== null) cancelAnimationFrame(readingFollowFrame);
+    readingFollowFrame = null;
     modalContent.querySelector('.poem-line.is-reading-current')?.classList.remove('is-reading-current');
     modalContent.classList.remove('is-following-reading');
+}
+
+function stopReadingFollowTracking() {
+    if (readingFollowFrame !== null) cancelAnimationFrame(readingFollowFrame);
+    readingFollowFrame = null;
+    modalContent.classList.remove('is-following-reading');
+}
+
+function trackReadingPosition() {
+    readingFollowFrame = null;
+    if (poemAudioPlayer.paused || poemAudioPlayer.ended
+        || followReading.getAttribute('aria-pressed') !== 'true') return;
+    updateReadingPosition();
+    readingFollowFrame = requestAnimationFrame(trackReadingPosition);
+}
+
+function startReadingFollowTracking() {
+    if (followReading.getAttribute('aria-pressed') !== 'true') return;
+    modalContent.classList.add('is-following-reading');
+    updateReadingPosition();
+    if (readingFollowFrame === null) readingFollowFrame = requestAnimationFrame(trackReadingPosition);
 }
 
 function updateReadingPosition() {
@@ -850,7 +875,12 @@ function updateReadingPosition() {
     if (previous === activeLine) return;
     previous?.classList.remove('is-reading-current');
     activeLine.classList.add('is-reading-current');
-    if (!poemAudioPlayer.paused) activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!poemAudioPlayer.paused) {
+        activeLine.scrollIntoView({
+            behavior: poemAudioPlayer.playbackRate > 1.25 ? 'auto' : 'smooth',
+            block: 'center'
+        });
+    }
 }
 
 function toggleFollowReading() {
@@ -858,8 +888,8 @@ function toggleFollowReading() {
     followReading.setAttribute('aria-pressed', String(enabled));
     followReading.textContent = enabled ? 'Following text' : 'Follow text';
     if (enabled) {
-        updateReadingPosition();
-        modalContent.classList.toggle('is-following-reading', !poemAudioPlayer.paused);
+        if (poemAudioPlayer.paused) updateReadingPosition();
+        else startReadingFollowTracking();
     } else {
         clearReadingPosition();
     }
@@ -2471,12 +2501,15 @@ function renderPoemAudio(session) {
             downloadableAudioUrl(cachedAudio),
             buildDownloadName(currentPoem, [VOICE_NAMES[voice] || voice], 'wav')
         );
-        generateAudio.textContent = 'Play reading';
+        generateAudio.hidden = true;
+        playSavedAudio.hidden = false;
         setPoemAudioStatus(
             voice === 'feminine' ? 'Gacrux · mature feminine voice' : 'Algieba · smooth masculine voice',
             'ready'
         );
     } else {
+        generateAudio.hidden = false;
+        playSavedAudio.hidden = true;
         poemAudioPlayer.removeAttribute('src');
         poemAudioPlayer.load();
         poemAudioPlayer.hidden = true;
@@ -2513,7 +2546,7 @@ async function generatePoemReading() {
 
     const cachedAudio = session.audioByVoice.get(voice);
     if (cachedAudio) {
-        poemAudioPlayer.play().catch(() => {});
+        playSavedPoemReading();
         return;
     }
 
@@ -2539,6 +2572,8 @@ async function generatePoemReading() {
         session.audioByVoice.set(voice, playbackUrl);
         poemAudioPlayer.src = playbackUrl;
         poemAudioPlayer.hidden = false;
+        generateAudio.hidden = true;
+        playSavedAudio.hidden = false;
         setDownloadLink(downloadAudio, downloadableAudioUrl(playbackUrl), downloadName);
         setPoemAudioStatus(
             saved
@@ -2556,9 +2591,15 @@ async function generatePoemReading() {
         if (currentChatSession === session) {
             generateAudio.disabled = false;
             poemVoice.disabled = false;
-            generateAudio.textContent = session.audioByVoice.has(voice) ? 'Play reading' : 'Read poem';
+            generateAudio.textContent = 'Read poem';
         }
     }
+}
+
+function playSavedPoemReading() {
+    if (!poemAudioPlayer.src) return;
+    if (poemAudioPlayer.ended) poemAudioPlayer.currentTime = 0;
+    poemAudioPlayer.play().catch(() => {});
 }
 
 function saveGeminiKey() {
@@ -2746,16 +2787,13 @@ imageApiKey.addEventListener('keydown', event => {
     }
 });
 generateAudio.addEventListener('click', generatePoemReading);
+playSavedAudio.addEventListener('click', playSavedPoemReading);
 followReading.addEventListener('click', toggleFollowReading);
 poemAudioPlayer.addEventListener('timeupdate', updateReadingPosition);
 poemAudioPlayer.addEventListener('seeking', updateReadingPosition);
-poemAudioPlayer.addEventListener('play', () => {
-    if (followReading.getAttribute('aria-pressed') === 'true') {
-        updateReadingPosition();
-        modalContent.classList.add('is-following-reading');
-    }
-});
-poemAudioPlayer.addEventListener('pause', () => modalContent.classList.remove('is-following-reading'));
+poemAudioPlayer.addEventListener('ratechange', updateReadingPosition);
+poemAudioPlayer.addEventListener('play', startReadingFollowTracking);
+poemAudioPlayer.addEventListener('pause', stopReadingFollowTracking);
 poemAudioPlayer.addEventListener('ended', clearReadingPosition);
 poemVoice.addEventListener('change', () => {
     if (currentChatSession) renderPoemAudio(currentChatSession);
