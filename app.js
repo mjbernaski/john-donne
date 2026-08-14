@@ -65,6 +65,8 @@ const poemModal = document.getElementById('poemModal');
 const modalTitle = document.getElementById('modalTitle');
 const modalContent = document.getElementById('modalContent');
 const closeModal = document.getElementById('closeModal');
+const modalContentElement = poemModal.querySelector('.modal-content');
+const mobileModalTabs = [...document.querySelectorAll('.mobile-modal-tab')];
 const chatStatus = document.getElementById('chatStatus');
 const chatMessages = document.getElementById('chatMessages');
 const chatForm = document.getElementById('chatForm');
@@ -2489,6 +2491,22 @@ function saveGeminiKey() {
     }
 }
 
+function setMobileModalTab(tabName, focusTab = false) {
+    const nextTab = ['read', 'visualize', 'discuss'].includes(tabName) ? tabName : 'read';
+    modalContentElement.dataset.mobileTab = nextTab;
+    document.getElementById('poemPanel').setAttribute(
+        'aria-labelledby',
+        nextTab === 'visualize' ? 'visualizeTab poemImagesTitle' : 'readTab modalTitle'
+    );
+    mobileModalTabs.forEach(tab => {
+        const isActive = tab.dataset.mobileTab === nextTab;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+        tab.tabIndex = isActive ? 0 : -1;
+        if (isActive && focusTab) tab.focus();
+    });
+}
+
 // Open poem modal
 function openPoemModal(poem) {
     recordPoemVisit(poem);
@@ -2501,6 +2519,7 @@ function openPoemModal(poem) {
     renderChatSession(currentChatSession);
     renderPoemImages(poem, currentChatSession);
     renderPoemAudio(currentChatSession);
+    setMobileModalTab('read');
     // Check every offered performance up front so all previously generated
     // readings appear as saved choices without requiring the reader to select
     // each voice first.
@@ -2515,7 +2534,9 @@ function openPoemModal(poem) {
     document.body.style.overflow = 'hidden';
     connectChatSession(currentChatSession);
     reconcilePoemImageJobs(poem, currentChatSession);
-    window.setTimeout(() => chatInput.focus(), 100);
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+        window.setTimeout(() => chatInput.focus(), 100);
+    }
 }
 
 // Close poem modal
@@ -2585,6 +2606,16 @@ searchInput.addEventListener('input', handleSearch);
 clearSearch.addEventListener('click', handleClearSearch);
 randomPoem.addEventListener('click', openRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
+mobileModalTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => setMobileModalTab(tab.dataset.mobileTab));
+    tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const direction = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (index + direction + mobileModalTabs.length) % mobileModalTabs.length;
+        setMobileModalTab(mobileModalTabs[nextIndex].dataset.mobileTab, true);
+    });
+});
 chatForm.addEventListener('submit', sendChatMessage);
 clearChat.addEventListener('click', clearCurrentChat);
 toggleChatHistory.addEventListener('click', () => {

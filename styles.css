@@ -700,6 +700,10 @@ body {
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
 }
 
+.mobile-modal-tabs {
+    display: none;
+}
+
 .modal-layout {
     display: grid;
     grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.82fr);
@@ -1858,7 +1862,9 @@ body {
     }
 
     .modal-title {
-        font-size: 1.8rem;
+        font-size: clamp(1.25rem, 4.5vw, 1.55rem);
+        line-height: 1.2;
+        margin-bottom: 22px;
     }
 
     .modal-poem-content {
@@ -1877,21 +1883,82 @@ body {
     .modal-content {
         height: 95vh;
         max-height: 95vh;
+        display: flex;
+        flex-direction: column;
+        border-radius: 14px;
+    }
+
+    .mobile-modal-tabs {
+        display: flex;
+        flex: 0 0 auto;
+        gap: 4px;
+        padding: 8px 58px 8px 8px;
+        border-bottom: 1px solid var(--border-color);
+        background: #f4f0e9;
+    }
+
+    .mobile-modal-tab {
+        flex: 1 1 0;
+        min-height: 42px;
+        padding: 9px 14px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-light);
+        font: 700 0.75rem/1.2 var(--font-sans);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+
+    .mobile-modal-tab.is-active {
+        background: var(--card-bg);
+        color: var(--secondary-color);
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+    }
+
+    .mobile-modal-tab:focus-visible {
+        outline: 3px solid rgba(212, 175, 55, 0.48);
+        outline-offset: -1px;
+    }
+
+    .modal-close {
+        top: 9px;
+        right: 10px;
     }
 
     .modal-layout {
-        grid-template-columns: 1fr;
-        grid-template-rows: minmax(42%, 1fr) minmax(380px, 58%);
-        overflow-y: auto;
+        display: block;
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
     }
 
-    .poem-panel {
-        min-height: 42vh;
+    .poem-panel,
+    .chat-panel {
+        height: 100%;
+    }
+
+    .modal-content[data-mobile-tab='read'] .chat-panel,
+    .modal-content[data-mobile-tab='visualize'] .chat-panel,
+    .modal-content[data-mobile-tab='discuss'] .poem-panel {
+        display: none;
+    }
+
+    .modal-content[data-mobile-tab='read'] .poem-images {
+        display: none;
+    }
+
+    .modal-content[data-mobile-tab='visualize'] .modal-title,
+    .modal-content[data-mobile-tab='visualize'] .poem-audio,
+    .modal-content[data-mobile-tab='visualize'] .modal-poem-content {
+        display: none;
     }
 
     .chat-panel {
-        min-height: 480px;
-        border-top: 1px solid var(--border-color);
+        min-height: 0;
+        border-top: 0;
         border-left: 0;
     }
 
@@ -1951,7 +2018,8 @@ body {
     }
 
     .poem-title {
-        font-size: 1.3rem;
+        font-size: 1.15rem;
+        line-height: 1.25;
     }
 
     .paste-panel {
