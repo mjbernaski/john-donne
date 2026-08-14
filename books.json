@@ -115,6 +115,25 @@
       "readerProfile": "A classically trained Shakespearean actor reading plays and poems with clarity, intimacy, and dramatic intelligence."
     },
     {
+      "id": "shelley",
+      "name": "Percy Bysshe Shelley",
+      "title": "The Complete Poetical Works of Percy Bysshe Shelley",
+      "subtitle": "The Oxford edition from Project Gutenberg",
+      "description": "Percy Bysshe Shelley (1792–1822) was an English Romantic poet whose radical politics, philosophical idealism, lyric music, and visionary imagery shaped works ranging from intimate songs to verse dramas and revolutionary epics.",
+      "poems": "poems-shelley.json",
+      "companionLabel": "Shelley companion",
+      "chatContext": "Percy Bysshe Shelley · Hutchinson Oxford edition · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/ebooks/4800",
+      "sourceNote": "The Complete Poetical Works of Percy Bysshe Shelley, edited by Thomas Hutchinson (Oxford edition, 1914), Project Gutenberg ebook 4800",
+      "stripEditorialApparatus": false,
+      "poet": "Percy Bysshe Shelley",
+      "authorProfile": "Percy Bysshe Shelley (1792–1822), an English Romantic poet known for lyric musicality, radical political thought, philosophical idealism, mythic and natural imagery, and experiments ranging from brief songs and fragments to verse drama and epic. Distinguish a poem's speaker or dramatic character from Shelley himself. The Translations section contains Shelley's English renderings and adaptations of other authors; when discussing those entries, distinguish the source author from Shelley's choices as translator.",
+      "sourceProfile": "The Complete Poetical Works of Percy Bysshe Shelley, edited by Thomas Hutchinson (Oxford University Press, 1914), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/4800. This collection omits editorial prefaces, bibliographical notices, textual variants, and notes; large works divided into acts or cantos are presented in those reading units. Spelling and punctuation otherwise follow the source text.",
+      "readingNotes": "Luminous, rhythmically alive, and intellectually clear. Let the syntax and imagery carry long sentences across line endings without singsong, while preserving the propulsion of rhyme and metre. Give political poems conviction without speechifying, lyrics intimacy without sentimentality, and dramatic passages distinct speakers without caricature. Respect stanza breaks and the text's shifting emotional weather.",
+      "readingScene": "An airy, resonant room open to wind and distant natural sounds, with the voice close and clear.",
+      "readerProfile": "A seasoned reader of English Romantic poetry performing Shelley with musical sensitivity, dramatic intelligence, and restrained intensity."
+    },
+    {
       "id": "miscellaneous",
       "name": "Miscellaneous",
       "title": "Miscellaneous",
