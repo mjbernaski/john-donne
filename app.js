@@ -59,6 +59,7 @@ const searchInput = document.getElementById('searchInput');
 const clearSearch = document.getElementById('clearSearch');
 const resultCount = document.getElementById('resultCount');
 const randomPoem = document.getElementById('randomPoem');
+const globalRandomPoem = document.getElementById('globalRandomPoem');
 const recentPoemsSection = document.getElementById('recentPoemsSection');
 const recentPoemsList = document.getElementById('recentPoemsList');
 const poemModal = document.getElementById('poemModal');
@@ -91,6 +92,7 @@ const poemImagesStatus = document.getElementById('poemImagesStatus');
 const poemImagesGrid = document.getElementById('poemImagesGrid');
 const poemVoice = document.getElementById('poemVoice');
 const generateAudio = document.getElementById('generateAudio');
+const followReading = document.getElementById('followReading');
 const geminiKeySetup = document.getElementById('geminiKeySetup');
 const geminiApiKey = document.getElementById('geminiApiKey');
 const saveGeminiApiKey = document.getElementById('saveGeminiApiKey');
@@ -603,6 +605,33 @@ function openRandomPoem() {
     openPoemModal(candidates[Math.floor(Math.random() * candidates.length)]);
 }
 
+async function openGlobalRandomPoem() {
+    if (!allBooks.length) return;
+
+    globalRandomPoem.disabled = true;
+    globalRandomPoem.textContent = 'Finding a poem…';
+
+    // Try the collections in random order. This also lets us skip an empty
+    // personal shelf without making it a dead end for the reader.
+    const books = [...allBooks];
+    for (let index = books.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [books[index], books[swapIndex]] = [books[swapIndex], books[index]];
+    }
+
+    try {
+        for (const book of books) {
+            await selectBook(book.id);
+            if (!allPoems.length) continue;
+            openRandomPoem();
+            return;
+        }
+    } finally {
+        globalRandomPoem.disabled = false;
+        globalRandomPoem.textContent = 'Take me to a random poem';
+    }
+}
+
 // Display poems in grid
 function displayPoems(poems) {
     if (poems.length === 0) {
@@ -787,6 +816,53 @@ function renderPoemContent(content, title) {
     });
 
     modalContent.replaceChildren(fragment);
+}
+
+function clearReadingPosition() {
+    modalContent.querySelector('.poem-line.is-reading-current')?.classList.remove('is-reading-current');
+    modalContent.classList.remove('is-following-reading');
+}
+
+function updateReadingPosition() {
+    if (followReading.getAttribute('aria-pressed') !== 'true'
+        || !Number.isFinite(poemAudioPlayer.duration)
+        || poemAudioPlayer.duration <= 0) return;
+
+    const lines = [...modalContent.querySelectorAll('.poem-line')];
+    if (!lines.length) return;
+    const weights = lines.map(line => Math.max(1, line.textContent.trim().length));
+    const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+    const target = Math.min(1, Math.max(0, poemAudioPlayer.currentTime / poemAudioPlayer.duration)) * totalWeight;
+    let elapsed = 0;
+    let activeIndex = lines.length - 1;
+    for (let index = 0; index < weights.length; index += 1) {
+        elapsed += weights[index];
+        if (target <= elapsed) {
+            activeIndex = index;
+            break;
+        }
+    }
+
+    const previous = modalContent.querySelector('.poem-line.is-reading-current');
+    // The narration's spoken phrasing trails the raw character estimate by
+    // about one displayed line, so keep the visual cue on the preceding line.
+    const activeLine = lines[Math.max(0, activeIndex - 1)];
+    if (previous === activeLine) return;
+    previous?.classList.remove('is-reading-current');
+    activeLine.classList.add('is-reading-current');
+    if (!poemAudioPlayer.paused) activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function toggleFollowReading() {
+    const enabled = followReading.getAttribute('aria-pressed') !== 'true';
+    followReading.setAttribute('aria-pressed', String(enabled));
+    followReading.textContent = enabled ? 'Following text' : 'Follow text';
+    if (enabled) {
+        updateReadingPosition();
+        modalContent.classList.toggle('is-following-reading', !poemAudioPlayer.paused);
+    } else {
+        clearReadingPosition();
+    }
 }
 
 function createSessionId() {
@@ -1814,6 +1890,7 @@ async function getFluxStatus() {
 function setPoemImagesStatus(message, state = '') {
     poemImagesStatus.textContent = message;
     poemImagesStatus.dataset.state = state;
+    poemImagesStatus.setAttribute('aria-live', state === 'error' ? 'assertive' : 'polite');
 }
 
 async function loadFluxImage(filename, imageElement, session, onReady = () => {}) {
@@ -2058,21 +2135,29 @@ async function generatePoemImageSet() {
     const session = currentChatSession;
     if (!poem || !session || session.imagesLoading) return;
 
+    session.imagesLoading = true;
+    generateImages.disabled = true;
+    setPoemImagesStatus('Connecting to the image service…', 'working');
+
     try {
         await getFluxStatus();
     } catch (error) {
+        session.imagesLoading = false;
+        generateImages.disabled = false;
         setPoemImagesStatus(error.message, 'error');
         return;
     }
 
     setPoemImagesStatus('Reading the poem for its imagery…', 'working');
     const scene = await describePoemScene(poem);
-    if (currentPoem !== poem || currentChatSession !== session) return;
+    if (currentPoem !== poem || currentChatSession !== session) {
+        session.imagesLoading = false;
+        return;
+    }
 
     const prompts = getImagePrompts(poem, getPoemImageCount(poem), session.images.length, scene);
     const newImages = prompts.map(({ prompt, style }) => ({ prompt, style, status: 'queued', jobId: null, filename: null }));
     session.images.push(...newImages);
-    session.imagesLoading = true;
     renderPoemImages(poem, session);
     savePoemSession(poem, session);
 
@@ -2377,6 +2462,7 @@ function renderPoemAudio(session) {
     const cachedAudio = session.audioByVoice.get(voice);
     updatePoemVoiceOptions(session);
     poemAudioPlayer.pause();
+    clearReadingPosition();
     if (cachedAudio) {
         poemAudioPlayer.src = cachedAudio;
         poemAudioPlayer.hidden = false;
@@ -2507,6 +2593,22 @@ function setMobileModalTab(tabName, focusTab = false) {
     });
 }
 
+// Mobile browser chrome and the software keyboard can change the visible
+// viewport without updating CSS viewport units reliably. Keep the modal tied
+// to the viewport that is actually visible so its bottom tab row cannot slip
+// below the screen.
+function syncMobileModalViewport() {
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+        poemModal.style.removeProperty('--mobile-modal-height');
+        poemModal.style.removeProperty('--mobile-modal-top');
+        return;
+    }
+
+    const viewport = window.visualViewport;
+    poemModal.style.setProperty('--mobile-modal-height', `${Math.round(viewport?.height || window.innerHeight)}px`);
+    poemModal.style.setProperty('--mobile-modal-top', `${Math.round(viewport?.offsetTop || 0)}px`);
+}
+
 // Open poem modal
 function openPoemModal(poem) {
     recordPoemVisit(poem);
@@ -2530,6 +2632,7 @@ function openPoemModal(poem) {
             });
         }
     });
+    syncMobileModalViewport();
     poemModal.classList.add('show');
     document.body.style.overflow = 'hidden';
     connectChatSession(currentChatSession);
@@ -2545,6 +2648,8 @@ function closePoemModal() {
     chatHistory.hidden = true;
     toggleChatHistory.setAttribute('aria-expanded', 'false');
     poemModal.classList.remove('show');
+    poemModal.style.removeProperty('--mobile-modal-height');
+    poemModal.style.removeProperty('--mobile-modal-top');
     document.body.style.overflow = 'auto';
 }
 
@@ -2605,6 +2710,7 @@ function escapeHtml(text) {
 searchInput.addEventListener('input', handleSearch);
 clearSearch.addEventListener('click', handleClearSearch);
 randomPoem.addEventListener('click', openRandomPoem);
+globalRandomPoem.addEventListener('click', openGlobalRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
 mobileModalTabs.forEach((tab, index) => {
     tab.addEventListener('click', () => setMobileModalTab(tab.dataset.mobileTab));
@@ -2640,6 +2746,17 @@ imageApiKey.addEventListener('keydown', event => {
     }
 });
 generateAudio.addEventListener('click', generatePoemReading);
+followReading.addEventListener('click', toggleFollowReading);
+poemAudioPlayer.addEventListener('timeupdate', updateReadingPosition);
+poemAudioPlayer.addEventListener('seeking', updateReadingPosition);
+poemAudioPlayer.addEventListener('play', () => {
+    if (followReading.getAttribute('aria-pressed') === 'true') {
+        updateReadingPosition();
+        modalContent.classList.add('is-following-reading');
+    }
+});
+poemAudioPlayer.addEventListener('pause', () => modalContent.classList.remove('is-following-reading'));
+poemAudioPlayer.addEventListener('ended', clearReadingPosition);
 poemVoice.addEventListener('change', () => {
     if (currentChatSession) renderPoemAudio(currentChatSession);
 });
@@ -2679,6 +2796,10 @@ document.addEventListener('keydown', (e) => {
         closePoemModal();
     }
 });
+
+window.addEventListener('resize', syncMobileModalViewport);
+window.visualViewport?.addEventListener('resize', syncMobileModalViewport);
+window.visualViewport?.addEventListener('scroll', syncMobileModalViewport);
 
 // Debounce search for better performance
 let searchTimeout;

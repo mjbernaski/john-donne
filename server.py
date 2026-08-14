@@ -541,7 +541,9 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
             f"{FLUX_BASE_URL}{upstream_path}",
             method,
             {"X-API-Key": api_key} if api_key else {},
-            timeout=45,
+            # Status is a lightweight health check. Fail it quickly so the UI
+            # can explain an offline image host instead of appearing inert.
+            timeout=10 if upstream_path == "/status" else 45,
             unavailable=lambda reason: {"success": False, "error": f"FLUX server unavailable: {reason}"},
         )
 

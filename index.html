@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Poems of John Donne</title>
-    <link rel="stylesheet" href="styles.css?v=20260814-21">
+    <link rel="stylesheet" href="styles.css?v=20260814-30">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
@@ -38,7 +38,10 @@
                 <span id="resultCount" class="result-count"></span>
             </div>
             <div class="poem-discovery">
-                <button id="randomPoem" class="random-poem" type="button">Take me to a random poem</button>
+                <div class="random-poem-actions">
+                    <button id="globalRandomPoem" class="random-poem" type="button">Take me to a random poem</button>
+                    <button id="randomPoem" class="random-poem random-poem--secondary" type="button">Random from this collection</button>
+                </div>
                 <section id="recentPoemsSection" class="recent-poems" aria-labelledby="recentPoemsTitle" hidden>
                     <h2 id="recentPoemsTitle" class="recent-poems-title">Recently visited</h2>
                     <div id="recentPoemsList" class="recent-poems-list"></div>
@@ -111,6 +114,7 @@
                                     </div>
                                     <button id="generateImages" class="poem-images-generate" type="button">Generate images</button>
                                 </div>
+                                <p id="poemImagesStatus" class="poem-images-status" role="status" aria-live="polite"></p>
                                 <div id="imageKeySetup" class="image-key-setup" hidden>
                                     <label for="imageApiKey">FLUX server access key</label>
                                     <div class="image-key-row">
@@ -136,7 +140,6 @@
                                         placeholder="e.g. at night, seen from a distance, with the sea just visible"
                                     ></textarea>
                                 </div>
-                                <p id="poemImagesStatus" class="poem-images-status"></p>
                                 <div id="poemImagesGrid" class="poem-images-grid"></div>
                             </section>
                             <section class="poem-audio" aria-labelledby="poemAudioTitle">
@@ -152,6 +155,7 @@
                                             <option value="masculine">Masculine · smooth</option>
                                         </select>
                                         <button id="generateAudio" type="button">Read poem</button>
+                                        <button id="followReading" class="follow-reading-toggle" type="button" aria-pressed="false">Follow text</button>
                                         <a id="downloadAudio" class="media-download" download hidden>Download</a>
                                     </div>
                                 </div>
@@ -241,6 +245,6 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260814-22"></script>
+    <script src="app.js?v=20260814-27"></script>
 </body>
 </html>
