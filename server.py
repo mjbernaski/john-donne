@@ -86,6 +86,10 @@ AUDIO_LIBRARY_LOCK = threading.Lock()
 # of this server sees the same poems.
 USER_POEMS_PATH = BASE_DIR / "user-poems.json"
 USER_POEMS_LOCK = threading.Lock()
+IMAGE_LIBRARY_PATH = BASE_DIR / "poem-images" / "manifest.json"
+IMAGE_ASSETS_PATH = BASE_DIR / "poem-images" / "assets"
+IMAGE_DELETIONS_PATH = BASE_DIR / "poem-images" / "deleted.json"
+IMAGE_LIBRARY_LOCK = threading.Lock()
 
 
 def read_user_poems() -> list[dict]:
@@ -103,6 +107,38 @@ def write_user_poems(poems: list[dict]) -> None:
     temporary = USER_POEMS_PATH.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(poems, indent=2, ensure_ascii=False), encoding="utf-8")
     temporary.replace(USER_POEMS_PATH)
+
+
+def browser_poem_hash(title: str, content: str) -> str:
+    """Match app.js stableHash, which iterates JavaScript UTF-16 code units."""
+    value = f"{title}\n{content}".encode("utf-16-le")
+    result = 2166136261
+    for offset in range(0, len(value), 2):
+        code_unit = value[offset] | (value[offset + 1] << 8)
+        result = ((result ^ code_unit) * 16777619) & 0xFFFFFFFF
+    return format(result, "x")
+
+
+def image_poem_metadata() -> dict[str, dict]:
+    metadata = {}
+    for book in BOOKS:
+        if book.get("poems"):
+            try:
+                poems = json.loads((BASE_DIR / str(book["poems"])).read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError):
+                continue
+        elif book.get("userPoems"):
+            poems = read_user_poems()
+        else:
+            continue
+        for poem in poems if isinstance(poems, list) else []:
+            title, content = str(poem.get("title", "")), str(poem.get("content", ""))
+            if title and content:
+                metadata[browser_poem_hash(title, content)] = {
+                    "poemTitle": title,
+                    "collection": str(book.get("name") or book.get("title") or "Poetry collection"),
+                }
+    return metadata
 
 
 def audio_library_key(title: str, text: str, voice: str, kind: str, book_id: str) -> str:
@@ -156,6 +192,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         super().do_HEAD()
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path.rstrip("/") == "/images":
+            self.path = "/images.html"
+            super().do_GET()
+            return
+        if self.path == "/api/image-library":
+            self._list_image_library()
+            return
         if self.path.startswith("/api/flux/"):
             upstream_path = self.path.removeprefix("/api/flux")
             if upstream_path in ALLOWED_GET_PATHS or upstream_path.startswith("/images/"):
@@ -185,10 +228,85 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         self.send_error(405, "PUT is only supported for the shared shelf")
 
     def do_DELETE(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path == "/api/image-library":
+            self._delete_library_images()
+            return
         if self.path.startswith("/api/poems/"):
             self._delete_user_poem(self.path.removeprefix("/api/poems/"))
             return
         self.send_error(405, "DELETE is only supported for the shared shelf")
+
+    @staticmethod
+    def _image_manifest() -> dict:
+        try:
+            payload = json.loads(IMAGE_LIBRARY_PATH.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _write_image_manifest(manifest: dict) -> None:
+        IMAGE_LIBRARY_PATH.parent.mkdir(exist_ok=True)
+        temporary = IMAGE_LIBRARY_PATH.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        temporary.replace(IMAGE_LIBRARY_PATH)
+
+    def _list_image_library(self) -> None:
+        with IMAGE_LIBRARY_LOCK:
+            manifest = self._image_manifest()
+        metadata = image_poem_metadata()
+        images = []
+        for poem_id, records in manifest.items():
+            for record in records if isinstance(records, list) else []:
+                filename = str(record.get("filename", ""))
+                if filename.startswith("poem-images/assets/"):
+                    images.append({"poemId": poem_id, **metadata.get(poem_id, {}), **record})
+        self._send_json(200, {"images": images})
+
+    def _delete_library_images(self) -> None:
+        try:
+            requested = self._read_json_body().get("images", [])
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "The deletion request was not valid JSON."})
+            return
+        targets = {
+            (str(item.get("poemId", "")), str(item.get("filename", "")))
+            for item in requested if isinstance(item, dict)
+        }
+        if not targets:
+            self._send_json(400, {"error": "Select at least one image to delete."})
+            return
+
+        deleted = []
+        with IMAGE_LIBRARY_LOCK:
+            manifest = self._image_manifest()
+            try:
+                tombstones = set(json.loads(IMAGE_DELETIONS_PATH.read_text(encoding="utf-8")))
+            except (FileNotFoundError, json.JSONDecodeError, TypeError):
+                tombstones = set()
+            for poem_id, filename in targets:
+                relative = filename.removeprefix("poem-images/assets/")
+                if not filename.startswith("poem-images/assets/") or Path(relative).name != relative:
+                    continue
+                records = manifest.get(poem_id, [])
+                kept = [record for record in records if record.get("filename") != filename]
+                if len(kept) == len(records):
+                    continue
+                if kept:
+                    manifest[poem_id] = kept
+                else:
+                    manifest.pop(poem_id, None)
+                try:
+                    (IMAGE_ASSETS_PATH / relative).unlink()
+                except FileNotFoundError:
+                    pass
+                deleted.append(filename)
+                tombstones.add(poem_id)
+            self._write_image_manifest(manifest)
+            tombstone_temp = IMAGE_DELETIONS_PATH.with_suffix(".json.tmp")
+            tombstone_temp.write_text(json.dumps(sorted(tombstones), indent=2) + "\n", encoding="utf-8")
+            tombstone_temp.replace(IMAGE_DELETIONS_PATH)
+        self._send_json(200, {"deleted": deleted})
 
     def _read_json_body(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))

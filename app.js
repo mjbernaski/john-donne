@@ -20,6 +20,7 @@ const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
 const BRIEF_MODE_STORAGE = 'john-donne-chat-brief';
 const READ_REPLIES_STORAGE = 'john-donne-chat-read-replies';
 const poemSceneCache = new Map();
+let poemImageLibrary = {};
 const AUDIO_DB_NAME = 'john-donne-media-v1';
 const AUDIO_STORE_NAME = 'audio';
 let allBooks = [];
@@ -60,6 +61,13 @@ const clearSearch = document.getElementById('clearSearch');
 const resultCount = document.getElementById('resultCount');
 const randomPoem = document.getElementById('randomPoem');
 const globalRandomPoem = document.getElementById('globalRandomPoem');
+const browseImages = document.getElementById('browseImages');
+const imageLibraryDialog = document.getElementById('imageLibraryDialog');
+const closeImageLibrary = document.getElementById('closeImageLibrary');
+const imageLibraryStatus = document.getElementById('imageLibraryStatus');
+const imageLibraryGrid = document.getElementById('imageLibraryGrid');
+const selectAllImages = document.getElementById('selectAllImages');
+const deleteSelectedImages = document.getElementById('deleteSelectedImages');
 const recentPoemsSection = document.getElementById('recentPoemsSection');
 const recentPoemsList = document.getElementById('recentPoemsList');
 const poemModal = document.getElementById('poemModal');
@@ -105,6 +113,8 @@ const audioTimeRemainingValue = document.getElementById('audioTimeRemainingValue
 let activeTimedAudio = null;
 let audioRemainingFrame = null;
 let readingFollowFrame = null;
+let imageLibraryItems = [];
+const imageLibraryObjectUrls = new Set();
 
 function formatAudioTime(seconds) {
     const wholeSeconds = Math.max(0, Math.ceil(seconds));
@@ -146,6 +156,12 @@ function showAudioTimeRemaining(audio) {
 
 // Load the collection manifest, then the poems of the selected book
 async function loadBooks() {
+    try {
+        const imageResponse = await fetch('poem-images/manifest.json', { cache: 'no-store' });
+        if (imageResponse.ok) poemImageLibrary = await imageResponse.json();
+    } catch {
+        // The pre-generated library is optional; readers can still generate images on demand.
+    }
     try {
         const response = await fetch('books.json');
         if (!response.ok) throw new Error(`books.json returned ${response.status}`);
@@ -963,6 +979,196 @@ function imageIdentity(image) {
     return image?.filename || image?.jobId || `${image?.style || ''}\n${image?.prompt || ''}`;
 }
 
+function storedBrowserImages() {
+    const items = [];
+    try {
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const storageKey = localStorage.key(index);
+            if (!storageKey?.startsWith(CHAT_STORAGE_PREFIX)) continue;
+            const stored = JSON.parse(localStorage.getItem(storageKey) || 'null');
+            if (!stored) continue;
+            const images = mergePoemImages(
+                Array.isArray(stored.images) ? stored.images : [],
+                Array.isArray(stored.media?.images) ? stored.media.images : [],
+                (stored.conversations || []).flatMap(conversation => conversation.images || [])
+            );
+            images.filter(image => image.filename && !image.filename.startsWith('poem-images/')).forEach(image => {
+                items.push({
+                    id: `browser:${storageKey}:${imageIdentity(image)}`,
+                    source: 'browser',
+                    storageKey,
+                    poemId: storageKey.slice(CHAT_STORAGE_PREFIX.length),
+                    poemTitle: stored.context?.poemTitle || 'Unknown poem',
+                    collection: 'This browser',
+                    ...image
+                });
+            });
+        }
+    } catch (error) {
+        console.warn('Could not read the browser image library:', error);
+    }
+    return items;
+}
+
+async function loadImageLibrary() {
+    imageLibraryStatus.textContent = 'Loading images…';
+    try {
+        const response = await fetch('/api/image-library', { cache: 'no-store' });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `Image library returned ${response.status}`);
+        const shared = (payload.images || []).map(image => ({
+            ...image,
+            id: `shared:${image.poemId}:${image.filename}`,
+            source: 'shared'
+        }));
+        const seen = new Set(shared.map(item => item.filename));
+        imageLibraryItems = [...shared, ...storedBrowserImages().filter(item => !seen.has(item.filename))];
+        renderImageLibrary();
+    } catch (error) {
+        imageLibraryStatus.textContent = `Could not load images: ${error.message}`;
+        imageLibraryGrid.replaceChildren();
+    }
+}
+
+async function loadLibraryThumbnail(item, imageElement) {
+    if (item.source === 'shared') {
+        imageElement.src = item.filename;
+        return;
+    }
+    try {
+        const response = await fluxFetch(`/images/${encodeURIComponent(item.filename)}`);
+        if (!response.ok) throw new Error(`Image request failed (${response.status})`);
+        const objectUrl = URL.createObjectURL(await response.blob());
+        imageLibraryObjectUrls.add(objectUrl);
+        imageElement.src = objectUrl;
+    } catch {
+        imageElement.alt = 'Image unavailable';
+        imageElement.closest('.image-library-card')?.classList.add('is-unavailable');
+    }
+}
+
+function selectedLibraryItems() {
+    const selected = new Set(
+        [...imageLibraryGrid.querySelectorAll('input[type="checkbox"]:checked')]
+            .map(input => input.value)
+    );
+    return imageLibraryItems.filter(item => selected.has(item.id));
+}
+
+function updateImageLibrarySelection() {
+    const selected = selectedLibraryItems().length;
+    deleteSelectedImages.disabled = selected === 0;
+    deleteSelectedImages.textContent = selected ? `Delete selected (${selected})` : 'Delete selected';
+    selectAllImages.checked = Boolean(imageLibraryItems.length && selected === imageLibraryItems.length);
+    selectAllImages.indeterminate = selected > 0 && selected < imageLibraryItems.length;
+}
+
+function renderImageLibrary() {
+    imageLibraryGrid.replaceChildren();
+    selectAllImages.checked = false;
+    selectAllImages.indeterminate = false;
+    if (!imageLibraryItems.length) {
+        imageLibraryStatus.textContent = 'No generated images are saved in the application.';
+        deleteSelectedImages.disabled = true;
+        return;
+    }
+    imageLibraryStatus.textContent = `${imageLibraryItems.length} saved image${imageLibraryItems.length === 1 ? '' : 's'}`;
+    imageLibraryItems.forEach(item => {
+        const card = document.createElement('label');
+        card.className = 'image-library-card';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = item.id;
+        checkbox.addEventListener('change', updateImageLibrarySelection);
+        const image = document.createElement('img');
+        image.alt = `${item.style || 'Generated'} image for “${item.poemTitle || 'poem'}”`;
+        image.loading = 'lazy';
+        const caption = document.createElement('span');
+        const title = document.createElement('strong');
+        title.textContent = item.poemTitle || 'Saved poem image';
+        const details = document.createElement('small');
+        details.textContent = [item.collection, item.style, item.source === 'shared' ? 'Shared library' : 'This browser'].filter(Boolean).join(' · ');
+        caption.append(title, details);
+        card.append(checkbox, image, caption);
+        imageLibraryGrid.appendChild(card);
+        loadLibraryThumbnail(item, image);
+    });
+    updateImageLibrarySelection();
+}
+
+function removeBrowserImageRecords(items) {
+    const identitiesByKey = new Map();
+    items.forEach(item => {
+        if (!identitiesByKey.has(item.storageKey)) identitiesByKey.set(item.storageKey, new Set());
+        identitiesByKey.get(item.storageKey).add(imageIdentity(item));
+    });
+    identitiesByKey.forEach((identities, storageKey) => {
+        try {
+            const stored = JSON.parse(localStorage.getItem(storageKey) || 'null');
+            if (!stored) return;
+            const keep = image => !identities.has(imageIdentity(image));
+            if (Array.isArray(stored.images)) stored.images = stored.images.filter(keep);
+            if (Array.isArray(stored.media?.images)) stored.media.images = stored.media.images.filter(keep);
+            (stored.conversations || []).forEach(conversation => {
+                if (Array.isArray(conversation.images)) conversation.images = conversation.images.filter(keep);
+            });
+            localStorage.setItem(storageKey, JSON.stringify(stored));
+        } catch (error) {
+            console.warn('Could not remove a browser image record:', error);
+        }
+    });
+}
+
+async function deleteSelectedLibraryImages() {
+    const selected = selectedLibraryItems();
+    if (!selected.length) return;
+    const warning = selected.some(item => item.source === 'browser')
+        ? 'Browser-generated images will disappear permanently from this app, but the FLUX host does not provide an API for deleting its unmanaged source files.'
+        : 'The selected PNG files will be permanently deleted from the shared library.';
+    if (!window.confirm(`Delete ${selected.length} selected image${selected.length === 1 ? '' : 's'}?\n\n${warning}`)) return;
+
+    deleteSelectedImages.disabled = true;
+    imageLibraryStatus.textContent = 'Deleting selected images…';
+    const shared = selected.filter(item => item.source === 'shared');
+    const browser = selected.filter(item => item.source === 'browser');
+    try {
+        if (shared.length) {
+            const response = await fetch('/api/image-library', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ images: shared.map(({ poemId, filename }) => ({ poemId, filename })) })
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || `Deletion returned ${response.status}`);
+            shared.forEach(item => {
+                poemImageLibrary[item.poemId] = (poemImageLibrary[item.poemId] || []).filter(image => image.filename !== item.filename);
+            });
+        }
+        removeBrowserImageRecords(browser);
+        if (currentChatSession) {
+            const removed = new Set(selected.map(imageIdentity));
+            currentChatSession.images = currentChatSession.images.filter(image => !removed.has(imageIdentity(image)));
+            savePoemSession(currentPoem, currentChatSession);
+            renderPoemImages(currentPoem, currentChatSession);
+        }
+        await loadImageLibrary();
+    } catch (error) {
+        imageLibraryStatus.textContent = `Could not delete images: ${error.message}`;
+        updateImageLibrarySelection();
+    }
+}
+
+function openImageLibrary() {
+    imageLibraryDialog.showModal();
+    loadImageLibrary();
+}
+
+function closeImageLibraryDialog() {
+    imageLibraryDialog.close();
+    imageLibraryObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    imageLibraryObjectUrls.clear();
+}
+
 // Images belong to the poem, not to the chat branch that happened to create
 // them. Preserve their original order while folding older branch-scoped data
 // into the poem-level gallery.
@@ -1103,7 +1309,8 @@ function savePoemSession(poem, session) {
 function getPoemChatSession(poem) {
     if (!poemChatSessions.has(poem)) {
         const restoredSession = loadStoredPoemSession(poem);
-        poemChatSessions.set(poem, restoredSession || {
+        const libraryImages = poemImageLibrary[getPoemId(poem)] || [];
+        const session = restoredSession || {
             id: createSessionId(),
             messages: [],
             model: null,
@@ -1122,7 +1329,9 @@ function getPoemChatSession(poem) {
             audioCheckedVoices: new Set(),
             audioRestoringVoices: new Set(),
             responseAudioByText: new Map()
-        });
+        };
+        session.images = mergePoemImages(libraryImages, session.images || []);
+        poemChatSessions.set(poem, session);
     }
     return poemChatSessions.get(poem);
 }
@@ -1932,7 +2141,9 @@ async function loadFluxImage(filename, imageElement, session, onReady = () => {}
         return;
     }
     try {
-        const response = await fluxFetch(`/images/${encodeURIComponent(filename)}`);
+        const response = filename.startsWith('poem-images/')
+            ? await fetch(filename)
+            : await fluxFetch(`/images/${encodeURIComponent(filename)}`);
         if (!response.ok) throw new Error(`Image request failed (${response.status})`);
         const objectUrl = URL.createObjectURL(await response.blob());
         session.imageObjectUrls.set(filename, objectUrl);
@@ -2754,6 +2965,18 @@ searchInput.addEventListener('input', handleSearch);
 clearSearch.addEventListener('click', handleClearSearch);
 randomPoem.addEventListener('click', openRandomPoem);
 globalRandomPoem.addEventListener('click', openGlobalRandomPoem);
+browseImages.addEventListener('click', openImageLibrary);
+closeImageLibrary.addEventListener('click', closeImageLibraryDialog);
+imageLibraryDialog.addEventListener('click', event => {
+    if (event.target === imageLibraryDialog) closeImageLibraryDialog();
+});
+selectAllImages.addEventListener('change', () => {
+    imageLibraryGrid.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.checked = selectAllImages.checked;
+    });
+    updateImageLibrarySelection();
+});
+deleteSelectedImages.addEventListener('click', deleteSelectedLibraryImages);
 closeModal.addEventListener('click', closePoemModal);
 modalTabs.forEach((tab, index) => {
     tab.addEventListener('click', () => setModalTab(tab.dataset.modalTab));

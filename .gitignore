@@ -5,3 +5,9 @@ __pycache__/
 user-poems.json
 user-poems.json.tmp
 audio-library/
+poem-images/assets/
+poem-images/batch-state.json
+poem-images/batch.log
+poem-images/deleted.json
+poem-images/manifest.json
+poem-images/manifest.json.tmp

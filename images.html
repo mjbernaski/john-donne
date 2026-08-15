@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Library · Poetry</title>
+    <link rel="stylesheet" href="styles.css?v=20260815-35">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="image-manager-page">
+    <header class="image-manager-header">
+        <div>
+            <p class="poem-images-eyebrow">Visual companions</p>
+            <h1>Image library</h1>
+            <p id="managerStatus" class="image-library-status" role="status" aria-live="polite">Loading images…</p>
+        </div>
+        <a href="/" class="image-manager-home">Return to poems</a>
+    </header>
+
+    <main>
+        <div class="image-library-toolbar image-manager-toolbar">
+            <label><input id="managerSelectAll" type="checkbox"> Select all</label>
+            <div class="image-manager-actions">
+                <button id="managerRefresh" class="image-manager-refresh" type="button">Refresh</button>
+                <button id="managerDelete" type="button" disabled>Delete selected</button>
+            </div>
+        </div>
+        <div id="managerGrid" class="image-library-grid image-manager-grid"></div>
+    </main>
+
+    <script src="images.js?v=20260815-35"></script>
+</body>
+</html>
