@@ -1608,6 +1608,7 @@ async function describePoemScene(poem) {
                         content: 'You turn poems into concrete visual scene descriptions for an image generator. '
                             + 'Reply with 40 to 70 words of purely visual description: setting, figures, objects, light, weather, and mood. '
                             + 'Never quote or restate the poem, never use quotation marks, and never mention writing, reading, books, paper, letters, or the poem itself. '
+                            + 'If the scene calls for a romantic or intimate pair of figures, describe them as one man and one woman. '
                             + 'Reply with the description only.'
                     },
                     { role: 'user', content: `A poem by ${getPoemAuthor(poem)} titled ${poem.title}.\n\n${poemText}` }
@@ -1869,6 +1870,7 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
                 // and given precedence, so it can override the scene it follows.
                 + `${steer ? `The reader asks specifically for: ${steer}. Follow that even where it departs from the subject above. ` : ''}`
                 + `Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. `
+                + `Any romantic or intimate pairing must be one man and one woman. `
                 + `No nudity, explicit sexual activity, pornographic imagery, or graphic violence. `
                 + `Purely pictorial: no lettering, captions, signatures, or written words anywhere. `
                 + `Render every part of it as ${style.label}, not as a generic digital illustration or photograph.`
