@@ -67,7 +67,7 @@ const modalTitle = document.getElementById('modalTitle');
 const modalContent = document.getElementById('modalContent');
 const closeModal = document.getElementById('closeModal');
 const modalContentElement = poemModal.querySelector('.modal-content');
-const mobileModalTabs = [...document.querySelectorAll('.mobile-modal-tab')];
+const modalTabs = [...document.querySelectorAll('.modal-tab')];
 const chatStatus = document.getElementById('chatStatus');
 const chatMessages = document.getElementById('chatMessages');
 const chatForm = document.getElementById('chatForm');
@@ -2620,15 +2620,15 @@ function saveGeminiKey() {
     }
 }
 
-function setMobileModalTab(tabName, focusTab = false) {
+function setModalTab(tabName, focusTab = false) {
     const nextTab = ['read', 'visualize', 'discuss'].includes(tabName) ? tabName : 'read';
-    modalContentElement.dataset.mobileTab = nextTab;
+    modalContentElement.dataset.modalTab = nextTab;
     document.getElementById('poemPanel').setAttribute(
         'aria-labelledby',
         nextTab === 'visualize' ? 'visualizeTab poemImagesTitle' : 'readTab modalTitle'
     );
-    mobileModalTabs.forEach(tab => {
-        const isActive = tab.dataset.mobileTab === nextTab;
+    modalTabs.forEach(tab => {
+        const isActive = tab.dataset.modalTab === nextTab;
         tab.classList.toggle('is-active', isActive);
         tab.setAttribute('aria-selected', String(isActive));
         tab.tabIndex = isActive ? 0 : -1;
@@ -2664,7 +2664,7 @@ function openPoemModal(poem) {
     renderChatSession(currentChatSession);
     renderPoemImages(poem, currentChatSession);
     renderPoemAudio(currentChatSession);
-    setMobileModalTab('read');
+    setModalTab('read');
     // Check every offered performance up front so all previously generated
     // readings appear as saved choices without requiring the reader to select
     // each voice first.
@@ -2755,14 +2755,14 @@ clearSearch.addEventListener('click', handleClearSearch);
 randomPoem.addEventListener('click', openRandomPoem);
 globalRandomPoem.addEventListener('click', openGlobalRandomPoem);
 closeModal.addEventListener('click', closePoemModal);
-mobileModalTabs.forEach((tab, index) => {
-    tab.addEventListener('click', () => setMobileModalTab(tab.dataset.mobileTab));
+modalTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => setModalTab(tab.dataset.modalTab));
     tab.addEventListener('keydown', event => {
         if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
         event.preventDefault();
         const direction = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (index + direction + mobileModalTabs.length) % mobileModalTabs.length;
-        setMobileModalTab(mobileModalTabs[nextIndex].dataset.mobileTab, true);
+        const nextIndex = (index + direction + modalTabs.length) % modalTabs.length;
+        setModalTab(modalTabs[nextIndex].dataset.modalTab, true);
     });
 });
 chatForm.addEventListener('submit', sendChatMessage);
