@@ -86,12 +86,12 @@ NEGATIVE_PROMPT = (
     "two men as a romantic couple, two women as a romantic couple, "
     "text, lettering, caption, title, signature, watermark, typography, written words"
 )
-# The image host is restarted independently of this server, so which backend is
-# loaded is re-checked periodically rather than fixed once at startup.
+# A refusal is only remembered for a while: the image host restarts independently
+# of this server, so a build that rejects the field can be replaced by one that
+# accepts it without anything here being told.
 FLUX_BACKEND_TTL = 300
 FLUX_BACKEND_LOCK = threading.Lock()
 FLUX_BACKEND_STATE: dict = {"sdxl": None, "checked": 0.0}
-FLUX_BACKEND_KEYS = ("model", "model_name", "backend", "pipeline", "checkpoint", "loaded_model")
 # Recent readings are kept so the player can load them from a URL ending in a
 # real filename; a blob URL downloads as "download.wav" whatever the page says.
 AUDIO_CACHE: "OrderedDict[str, tuple[str, bytes]]" = OrderedDict()
@@ -131,42 +131,22 @@ def remember_flux_backend(sdxl: bool) -> None:
         FLUX_BACKEND_STATE.update({"sdxl": sdxl, "checked": time.monotonic()})
 
 
-def _status_names_sdxl(status: dict) -> bool:
-    """Look for the loaded backend under the keys FLUX builds have used for it.
-
-    A whole-body search would also match an SDXL checkpoint that is merely
-    available, or a queued job whose prompt happens to mention it, and a wrong
-    yes costs a rejected generation.
-    """
-    scopes = [status] + [value for value in status.values() if isinstance(value, dict)]
-    for scope in scopes:
-        for key in FLUX_BACKEND_KEYS:
-            if "sdxl" in str(scope.get(key, "")).lower():
-                return True
-    return False
-
-
 def flux_supports_negative_prompt() -> bool:
-    """True when the image host runs the SDXL backend, which accepts negative_prompt.
+    """Whether the image host will accept negative_prompt, learned by trying it.
 
-    The default FLUX build rejects the field outright, so it has to be stripped
-    rather than sent hopefully.
+    /status cannot answer this: it reports queue depth, power draw, and the
+    vision model, but names no image backend at all, whether the host was
+    started with --sdxl or without it. So the field is sent optimistically and
+    the answer comes from how the host replies. A refusal is remembered and the
+    generation retried without it, which costs one rejected attempt per plain
+    FLUX restart; assuming the other way round costs the negative prompt
+    permanently, since nothing would ever prove SDXL was there.
     """
-    now = time.monotonic()
     with FLUX_BACKEND_LOCK:
-        cached = FLUX_BACKEND_STATE["sdxl"]
-        if cached is not None and now - FLUX_BACKEND_STATE["checked"] < FLUX_BACKEND_TTL:
-            return cached
-    headers = {"X-API-Key": FLUX_API_KEY} if FLUX_API_KEY else {}
-    sdxl = False
-    try:
-        with urlopen(Request(f"{FLUX_BASE_URL}/status", headers=headers), timeout=10) as response:
-            status = json.loads(response.read() or b"{}")
-        sdxl = _status_names_sdxl(status) if isinstance(status, dict) else False
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
-        sdxl = False  # An unreachable host is retried on the next generation.
-    remember_flux_backend(sdxl)
-    return sdxl
+        refused = FLUX_BACKEND_STATE["sdxl"]
+        if refused is False and time.monotonic() - FLUX_BACKEND_STATE["checked"] < FLUX_BACKEND_TTL:
+            return False
+    return True
 
 
 def browser_poem_hash(title: str, content: str) -> str:

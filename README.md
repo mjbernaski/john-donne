@@ -303,14 +303,21 @@ naming what each figure wears rather than leaving it to the trailing rules,
 because the seventy-word scene outweighs anything stated after it.
 
 SDXL, unlike FLUX, takes a real negative prompt, and that is where the
-exclusions now live. The image proxy checks `/status` for the loaded backend
-(re-checked every five minutes, since the image host restarts on its own) and
-attaches `NEGATIVE_PROMPT` when SDXL is loaded, stripping the field for a plain
-FLUX build, which rejects it outright. If a backend swapped since the last check
-and the field comes back a 400 or 422, the proxy retries once without it rather
-than lose the generation. Both the browser and the batch script send
-`negative_prompt: null` and inherit the text from the proxy, so there is one
-copy of it.
+exclusions now live. The image proxy attaches `NEGATIVE_PROMPT` to every
+generation and lets the host's answer decide: if it comes back a 400 or 422 the
+field is stripped and the generation retried once, and the refusal is remembered
+for five minutes so the next few requests skip the wasted attempt. That costs one
+rejected call per plain-FLUX restart, and the memory expires because the image
+host restarts independently of this server.
+
+Asking `/status` which backend is loaded does not work, and the code tried it
+first. That payload reports queue depth, power draw, and the vision model, and
+names no image backend whatever — it is byte-identical whether the host was
+started with `--sdxl` or without it. Deciding from it meant defaulting to "not
+SDXL", which nothing could ever overturn, so the negative prompt would have been
+suppressed permanently. Trying the field is the only thing that answers the
+question. Both the browser and the batch script send `negative_prompt: null` and
+inherit the text from the proxy, so there is one copy of it.
 
 Each prompt now opens with the medium and restates it at the end. The style
 clause used to follow the model-written scene description, and a concrete scene
