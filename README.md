@@ -289,8 +289,28 @@ render them onto pages and banners, so each poem is first distilled by the model
 server into a short visual scene description, and only that description reaches
 the image server. If the model server is unreachable, generation still proceeds
 from the style and composition direction alone — the poem's words are never sent
-to FLUX. (`negative_prompt` is left `null`: this FLUX build rejects it unless
-started with `--sdxl`.)
+to FLUX.
+
+Wardrobe and pairing are stated affirmatively — "every figure wears complete
+period dress", "any couple is one man and one woman" — and placed directly after
+the scene, while the figures are still what the prompt is talking about. They
+were once written as prohibitions trailing the whole prompt, and every one of
+the first hundred images carried that text while plainly ignoring it: FLUX reads
+the prompt through T5, which has no operator for "no", so "no nudity"
+contributes the word *nudity* to the conditioning and raises the odds of the
+thing it forbids. The scene description does the same work one stage earlier,
+naming what each figure wears rather than leaving it to the trailing rules,
+because the seventy-word scene outweighs anything stated after it.
+
+SDXL, unlike FLUX, takes a real negative prompt, and that is where the
+exclusions now live. The image proxy checks `/status` for the loaded backend
+(re-checked every five minutes, since the image host restarts on its own) and
+attaches `NEGATIVE_PROMPT` when SDXL is loaded, stripping the field for a plain
+FLUX build, which rejects it outright. If a backend swapped since the last check
+and the field comes back a 400 or 422, the proxy retries once without it rather
+than lose the generation. Both the browser and the batch script send
+`negative_prompt: null` and inherit the text from the proxy, so there is one
+copy of it.
 
 Each prompt now opens with the medium and restates it at the end. The style
 clause used to follow the model-written scene description, and a concrete scene

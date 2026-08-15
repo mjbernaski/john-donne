@@ -84,7 +84,10 @@ def describe(poem: dict, poet: str) -> str:
     payload = request_json("/api/chat/v1/chat/completions", {
         "model": "qwen3-vl-235b",
         "messages": [
-            {"role": "system", "content": "Turn poems into concrete visual scenes. Reply with 40 to 70 words describing only setting, figures, objects, light, weather, and mood. Never quote the poem or mention writing, books, paper, or letters. Use no quotation marks. If the scene is romantic, describe one man and one woman. Reply with the description only."},
+            # The figures are dressed and paired here rather than in the trailing
+            # rules of the image prompt: the scene text is what the generator
+            # actually renders, and it outweighs anything stated after it.
+            {"role": "system", "content": "Turn poems into concrete visual scenes. Reply with 40 to 70 words describing only setting, figures, objects, light, weather, and mood. Never quote the poem or mention writing, books, paper, or letters. Use no quotation marks. Name the clothing every figure wears, in period dress that covers shoulders, arms, and legs. Where two figures appear together, make them one man and one woman. Reply with the description only."},
             {"role": "user", "content": f"A poem by {poet} titled {poem['title']}.\n\n{text}"},
         ],
         "temperature": 0.6, "max_tokens": 200, "stream": False,
@@ -94,11 +97,16 @@ def describe(poem: dict, poet: str) -> str:
 
 def make_prompt(scene: str, index: int) -> tuple[str, str]:
     label, style = STYLES[index % len(STYLES)]
+    # The wardrobe and pairing are stated affirmatively and while the figures are
+    # still the active subject. FLUX reads the prompt through T5, which has no
+    # operator for "no", so a prohibition tends to summon what it forbids; the
+    # exclusions themselves reach SDXL as a negative prompt from the proxy instead.
     prompt = (f"{style} The medium above governs the entire image. Subject: {scene} "
+              "Every figure wears complete period dress, layered fabric covering shoulders, arms, torso, and legs. "
+              "Any couple is one man and one woman. "
               f"{DIRECTIONS[index % len(DIRECTIONS)]} Emotionally intelligent and visually coherent. "
-              "Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. "
-              "Any romantic or intimate pairing must be one man and one woman. No nudity, explicit sexual activity, "
-              "pornographic imagery, or graphic violence. Purely pictorial: no lettering, captions, signatures, or "
+              "Sensuality is carried by gesture, gaze, longing, and atmosphere rather than by skin. "
+              "Purely pictorial: no lettering, captions, signatures, or "
               f"written words anywhere. Render every part of it as {label}, not as a generic digital illustration or photograph.")
     # The FLUX host writes prompt metadata through a legacy single-byte path.
     # Replace the few unsupported glyphs rather than losing an otherwise valid job.
@@ -111,6 +119,8 @@ def transient(error: Exception) -> bool:
 
 
 def submit(prompt: str) -> str:
+    # negative_prompt is left to the proxy, which supplies the shared exclusions
+    # when the image host runs SDXL and strips the field when it does not.
     payload = request_json("/api/flux/generate", {"prompt": prompt, "negative_prompt": None, "orientation": "landscape", "size": "1mp", "steps": 25, "seed": None, "guidance": None, "batch": 1, "spectrum_grid": False, "spectrum_same_seed": True, "show_preview": False, "save_previews": False, "selected_cells": []})
     if not payload.get("success") or not payload.get("job_id"):
         raise RuntimeError(payload.get("error") or "Image service returned no job ID")

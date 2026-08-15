@@ -75,6 +75,23 @@ ALLOWED_POST_PATHS = {"/generate"}
 ALLOWED_CHAT_GET_PATHS = {"/v1/models"}
 ALLOWED_CHAT_POST_PATHS = {"/v1/chat/completions"}
 CHAT_TIMEOUT = 300
+# FLUX reads the prompt through T5, which has no operator for "no", so the
+# prohibitions written into the positive prompt often act as attractors instead.
+# SDXL takes a real negative prompt, so when that backend is loaded the exclusions
+# are sent where they are actually understood. The proxy owns this text so the
+# batch script and the browser both inherit it from one place.
+NEGATIVE_PROMPT = (
+    "nudity, nude figure, bare chest, exposed breasts, exposed genitals, topless, "
+    "underwear, explicit sexual activity, pornography, graphic violence, gore, blood, "
+    "two men as a romantic couple, two women as a romantic couple, "
+    "text, lettering, caption, title, signature, watermark, typography, written words"
+)
+# The image host is restarted independently of this server, so which backend is
+# loaded is re-checked periodically rather than fixed once at startup.
+FLUX_BACKEND_TTL = 300
+FLUX_BACKEND_LOCK = threading.Lock()
+FLUX_BACKEND_STATE: dict = {"sdxl": None, "checked": 0.0}
+FLUX_BACKEND_KEYS = ("model", "model_name", "backend", "pipeline", "checkpoint", "loaded_model")
 # Recent readings are kept so the player can load them from a URL ending in a
 # real filename; a blob URL downloads as "download.wav" whatever the page says.
 AUDIO_CACHE: "OrderedDict[str, tuple[str, bytes]]" = OrderedDict()
@@ -107,6 +124,49 @@ def write_user_poems(poems: list[dict]) -> None:
     temporary = USER_POEMS_PATH.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(poems, indent=2, ensure_ascii=False), encoding="utf-8")
     temporary.replace(USER_POEMS_PATH)
+
+
+def remember_flux_backend(sdxl: bool) -> None:
+    with FLUX_BACKEND_LOCK:
+        FLUX_BACKEND_STATE.update({"sdxl": sdxl, "checked": time.monotonic()})
+
+
+def _status_names_sdxl(status: dict) -> bool:
+    """Look for the loaded backend under the keys FLUX builds have used for it.
+
+    A whole-body search would also match an SDXL checkpoint that is merely
+    available, or a queued job whose prompt happens to mention it, and a wrong
+    yes costs a rejected generation.
+    """
+    scopes = [status] + [value for value in status.values() if isinstance(value, dict)]
+    for scope in scopes:
+        for key in FLUX_BACKEND_KEYS:
+            if "sdxl" in str(scope.get(key, "")).lower():
+                return True
+    return False
+
+
+def flux_supports_negative_prompt() -> bool:
+    """True when the image host runs the SDXL backend, which accepts negative_prompt.
+
+    The default FLUX build rejects the field outright, so it has to be stripped
+    rather than sent hopefully.
+    """
+    now = time.monotonic()
+    with FLUX_BACKEND_LOCK:
+        cached = FLUX_BACKEND_STATE["sdxl"]
+        if cached is not None and now - FLUX_BACKEND_STATE["checked"] < FLUX_BACKEND_TTL:
+            return cached
+    headers = {"X-API-Key": FLUX_API_KEY} if FLUX_API_KEY else {}
+    sdxl = False
+    try:
+        with urlopen(Request(f"{FLUX_BASE_URL}/status", headers=headers), timeout=10) as response:
+            status = json.loads(response.read() or b"{}")
+        sdxl = _status_names_sdxl(status) if isinstance(status, dict) else False
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+        sdxl = False  # An unreachable host is retried on the next generation.
+    remember_flux_backend(sdxl)
+    return sdxl
 
 
 def browser_poem_hash(title: str, content: str) -> str:
@@ -448,7 +508,9 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path.startswith("/api/flux/"):
             upstream_path = self.path.removeprefix("/api/flux")
-            if upstream_path in ALLOWED_POST_PATHS:
+            if upstream_path == "/generate":
+                self._flux_generate()
+            elif upstream_path in ALLOWED_POST_PATHS:
                 self._proxy_flux("POST", upstream_path)
             else:
                 self.send_error(404, "Unknown FLUX endpoint")
@@ -652,6 +714,47 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
     def _send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode()
         self._send_proxy_response(status, {"Content-Type": "application/json"}, body)
+
+    def _flux_generate(self) -> None:
+        """Attach the negative prompt for SDXL, and strip it for backends that refuse it."""
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length) if length else b""
+        try:
+            payload = json.loads(body or b"{}")
+        except json.JSONDecodeError:
+            payload = None
+        if not isinstance(payload, dict):
+            self._send_json(400, {"success": False, "error": "The generation request was not valid JSON."})
+            return
+
+        negative = str(payload.get("negative_prompt") or "").strip() or NEGATIVE_PROMPT
+        sdxl = flux_supports_negative_prompt()
+        payload = {**payload, "negative_prompt": negative if sdxl else None}
+        status, headers, response = self._flux_upstream(payload)
+        # A backend swapped since the last check can still be handed a field it
+        # rejects. Spend one retry without it rather than lose the generation.
+        # Only the codes FLUX uses to refuse a field count; a 5xx or a bad key
+        # says nothing about which backend is loaded.
+        if sdxl and status in (400, 422):
+            remember_flux_backend(False)
+            status, headers, response = self._flux_upstream({**payload, "negative_prompt": None})
+        self._send_proxy_response(status, headers, response)
+
+    def _flux_upstream(self, payload: dict) -> tuple[int, dict, bytes]:
+        api_key = FLUX_API_KEY or self.headers.get("X-API-Key", "")
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if api_key:
+            headers["X-API-Key"] = api_key
+        request = Request(f"{FLUX_BASE_URL}/generate", data=json.dumps(payload).encode(), headers=headers, method="POST")
+        try:
+            with urlopen(request, timeout=45) as response:
+                return response.status, dict(response.headers), response.read()
+        except HTTPError as error:
+            return error.code, dict(error.headers), error.read()
+        except (URLError, TimeoutError) as error:
+            reason = getattr(error, "reason", str(error))
+            body = json.dumps({"success": False, "error": f"FLUX server unavailable: {reason}"}).encode()
+            return 502, {"Content-Type": "application/json"}, body
 
     def _proxy_flux(self, method: str, upstream_path: str) -> None:
         api_key = FLUX_API_KEY or self.headers.get("X-API-Key", "")

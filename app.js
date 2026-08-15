@@ -1817,7 +1817,11 @@ async function describePoemScene(poem) {
                         content: 'You turn poems into concrete visual scene descriptions for an image generator. '
                             + 'Reply with 40 to 70 words of purely visual description: setting, figures, objects, light, weather, and mood. '
                             + 'Never quote or restate the poem, never use quotation marks, and never mention writing, reading, books, paper, letters, or the poem itself. '
-                            + 'If the scene calls for a romantic or intimate pair of figures, describe them as one man and one woman. '
+                            // The scene text outweighs the rules that trail it in the image
+                            // prompt, so the figures are dressed and paired here, at the point
+                            // where the generator is actually told what it is looking at.
+                            + 'Name the clothing every figure wears, in period dress that covers shoulders, arms, and legs. '
+                            + 'Where two figures appear together, make them one man and one woman. '
                             + 'Reply with the description only.'
                     },
                     { role: 'user', content: `A poem by ${getPoemAuthor(poem)} titled ${poem.title}.\n\n${poemText}` }
@@ -2074,13 +2078,17 @@ function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
             // description it was outweighed by it, and every style came out alike.
             prompt: `${style.prompt} The medium above governs the entire image. `
                 + `${scene ? `Subject: ${scene} ` : `Subject: a poem by ${getPoemAuthor(poem)}. `}`
+                // Stated affirmatively and while the figures are still the active
+                // subject. FLUX reads the prompt through T5, which has no operator
+                // for "no", so a prohibition tends to summon what it forbids; the
+                // exclusions themselves go to SDXL as a negative prompt instead.
+                + `Every figure wears complete period dress, layered fabric covering shoulders, arms, torso, and legs. `
+                + `Any couple is one man and one woman. `
                 + `${direction} `
                 // The reader's steer is stated last among the content directions
                 // and given precedence, so it can override the scene it follows.
                 + `${steer ? `The reader asks specifically for: ${steer}. Follow that even where it departs from the subject above. ` : ''}`
-                + `Emotionally intelligent and visually coherent. Tasteful, fully clothed sensuality is welcome through intimacy, longing, gesture, and atmosphere. `
-                + `Any romantic or intimate pairing must be one man and one woman. `
-                + `No nudity, explicit sexual activity, pornographic imagery, or graphic violence. `
+                + `Emotionally intelligent and visually coherent. Sensuality is carried by gesture, gaze, longing, and atmosphere rather than by skin. `
                 + `Purely pictorial: no lettering, captions, signatures, or written words anywhere. `
                 + `Render every part of it as ${style.label}, not as a generic digital illustration or photograph.`
         };
@@ -2237,7 +2245,9 @@ async function submitFluxImage(prompt) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             prompt,
-            negative_prompt: null,  // Rejected unless the FLUX server runs the SDXL backend.
+            // Left to the proxy, which fills in the shared exclusions when the image
+            // host runs SDXL and strips the field for backends that reject it.
+            negative_prompt: null,
             orientation: 'landscape',
             size: '1mp',
             steps: 25,
