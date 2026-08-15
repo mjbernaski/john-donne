@@ -68,6 +68,7 @@ const imageLibraryStatus = document.getElementById('imageLibraryStatus');
 const imageLibraryGrid = document.getElementById('imageLibraryGrid');
 const selectAllImages = document.getElementById('selectAllImages');
 const deleteSelectedImages = document.getElementById('deleteSelectedImages');
+const clearBrowserImages = document.getElementById('clearBrowserImages');
 const recentPoemsSection = document.getElementById('recentPoemsSection');
 const recentPoemsList = document.getElementById('recentPoemsList');
 const poemModal = document.getElementById('poemModal');
@@ -1030,9 +1031,36 @@ async function loadImageLibrary() {
     }
 }
 
-async function loadLibraryThumbnail(item, imageElement) {
+function markThumbnailUnavailable(imageElement, reason) {
+    // An <img> left without a src is just an empty tile, so the reason is written
+    // into the card itself rather than into alt text nothing will read aloud.
+    imageElement.alt = reason;
+    const card = imageElement.closest('.image-library-card');
+    if (!card) return;
+    card.classList.add('is-unavailable');
+    const note = card.querySelector('.image-library-missing');
+    if (note) note.textContent = reason;
+}
+
+async function fluxHostOnline() {
+    // Browser-held images are only ever records: the bytes stay on the image
+    // host. Ask it once whether it is up, rather than letting every thumbnail
+    // discover the outage separately and hang on its own proxy timeout.
+    try {
+        const response = await fluxFetch('/status');
+        return response.ok && (await response.json()).success !== false;
+    } catch {
+        return false;
+    }
+}
+
+async function loadLibraryThumbnail(item, imageElement, hostOnline) {
     if (item.source === 'shared') {
         imageElement.src = item.filename;
+        return;
+    }
+    if (!hostOnline) {
+        markThumbnailUnavailable(imageElement, 'Image host offline');
         return;
     }
     try {
@@ -1042,8 +1070,7 @@ async function loadLibraryThumbnail(item, imageElement) {
         imageLibraryObjectUrls.add(objectUrl);
         imageElement.src = objectUrl;
     } catch {
-        imageElement.alt = 'Image unavailable';
-        imageElement.closest('.image-library-card')?.classList.add('is-unavailable');
+        markThumbnailUnavailable(imageElement, 'Image unavailable');
     }
 }
 
@@ -1070,9 +1097,23 @@ function renderImageLibrary() {
     if (!imageLibraryItems.length) {
         imageLibraryStatus.textContent = 'No generated images are saved in the application.';
         deleteSelectedImages.disabled = true;
+        clearBrowserImages.hidden = true;
         return;
     }
+    const browserCount = imageLibraryItems.filter(item => item.source === 'browser').length;
+    clearBrowserImages.hidden = browserCount === 0;
+    clearBrowserImages.textContent = `Remove ${browserCount} browser-held record${browserCount === 1 ? '' : 's'}`;
     imageLibraryStatus.textContent = `${imageLibraryItems.length} saved image${imageLibraryItems.length === 1 ? '' : 's'}`;
+    // Only browser-held records need the image host, so only pay for the check
+    // when there are some; the shared library is served from this origin.
+    const hostOnline = browserCount ? fluxHostOnline() : Promise.resolve(true);
+    if (browserCount) {
+        hostOnline.then(online => {
+            if (online) return;
+            imageLibraryStatus.textContent =
+                `${imageLibraryItems.length} saved · ${browserCount} held in this browser cannot be shown while the image host is offline`;
+        });
+    }
     imageLibraryItems.forEach(item => {
         const card = document.createElement('label');
         card.className = 'image-library-card';
@@ -1083,15 +1124,17 @@ function renderImageLibrary() {
         const image = document.createElement('img');
         image.alt = `${item.style || 'Generated'} image for “${item.poemTitle || 'poem'}”`;
         image.loading = 'lazy';
+        const missing = document.createElement('span');
+        missing.className = 'image-library-missing';
         const caption = document.createElement('span');
         const title = document.createElement('strong');
         title.textContent = item.poemTitle || 'Saved poem image';
         const details = document.createElement('small');
         details.textContent = [item.collection, item.style, item.source === 'shared' ? 'Shared library' : 'This browser'].filter(Boolean).join(' · ');
         caption.append(title, details);
-        card.append(checkbox, image, caption);
+        card.append(checkbox, image, missing, caption);
         imageLibraryGrid.appendChild(card);
-        loadLibraryThumbnail(item, image);
+        hostOnline.then(online => loadLibraryThumbnail(item, image, online));
     });
     updateImageLibrarySelection();
 }
@@ -1145,16 +1188,48 @@ async function deleteSelectedLibraryImages() {
             });
         }
         removeBrowserImageRecords(browser);
-        if (currentChatSession) {
-            const removed = new Set(selected.map(imageIdentity));
-            currentChatSession.images = currentChatSession.images.filter(image => !removed.has(imageIdentity(image)));
-            savePoemSession(currentPoem, currentChatSession);
-            renderPoemImages(currentPoem, currentChatSession);
-        }
+        forgetImagesInOpenSession(selected);
         await loadImageLibrary();
     } catch (error) {
         imageLibraryStatus.textContent = `Could not delete images: ${error.message}`;
         updateImageLibrarySelection();
+    }
+}
+
+function forgetImagesInOpenSession(items) {
+    // The poem on screen holds its own copy of the gallery, so it has to be told
+    // as well or the deleted images linger there until the modal is reopened.
+    if (!currentChatSession) return;
+    const removed = new Set(items.map(imageIdentity));
+    currentChatSession.images = currentChatSession.images.filter(image => !removed.has(imageIdentity(image)));
+    savePoemSession(currentPoem, currentChatSession);
+    renderPoemImages(currentPoem, currentChatSession);
+}
+
+async function clearBrowserHeldImages() {
+    // Their bytes were never copied off the image host, so these records cannot
+    // be shown once it goes away. Removing them is local and final: the host has
+    // no delete API, so its own PNG files are left alone.
+    const browser = imageLibraryItems.filter(item => item.source === 'browser');
+    if (!browser.length) return;
+    const confirmed = window.confirm(
+        `Permanently remove ${browser.length} browser-held image record${browser.length === 1 ? '' : 's'}?\n\n`
+        + 'These are the images generated in this browser, stored here as references to files on the image host. '
+        + 'They will also disappear from each poem\'s Visual Companions gallery. '
+        + 'The shared library is not touched, and neither are the source files on the image host. This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    clearBrowserImages.disabled = true;
+    imageLibraryStatus.textContent = 'Removing browser-held records…';
+    try {
+        removeBrowserImageRecords(browser);
+        forgetImagesInOpenSession(browser);
+        await loadImageLibrary();
+    } catch (error) {
+        imageLibraryStatus.textContent = `Could not remove the records: ${error.message}`;
+    } finally {
+        clearBrowserImages.disabled = false;
     }
 }
 
@@ -2987,6 +3062,7 @@ selectAllImages.addEventListener('change', () => {
     updateImageLibrarySelection();
 });
 deleteSelectedImages.addEventListener('click', deleteSelectedLibraryImages);
+clearBrowserImages.addEventListener('click', clearBrowserHeldImages);
 closeModal.addEventListener('click', closePoemModal);
 modalTabs.forEach((tab, index) => {
     tab.addEventListener('click', () => setModalTab(tab.dataset.modalTab));

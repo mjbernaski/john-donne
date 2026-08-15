@@ -960,6 +960,30 @@ body {
     opacity: 0.25;
 }
 
+/* A thumbnail that never loaded leaves the img empty, so the card says why
+   across the space the picture would have filled. Both selectors have to
+   out-specify the `.image-library-card > span` caption rule below, which would
+   otherwise lay this span out as a second caption. */
+.image-library-card > .image-library-missing {
+    display: none;
+}
+
+.image-library-card.is-unavailable > .image-library-missing {
+    display: grid;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    aspect-ratio: 16 / 9;
+    place-items: center;
+    padding: 0 16px;
+    color: var(--text-light);
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    text-align: center;
+}
+
 .image-library-card > span {
     display: grid;
     gap: 3px;
@@ -1024,10 +1048,17 @@ body {
     gap: 9px;
 }
 
-.image-library-toolbar .image-manager-refresh {
+.image-library-toolbar .image-manager-refresh,
+.image-library-toolbar .image-library-secondary {
     border-color: #baa994;
     background: white;
     color: var(--secondary-color);
+}
+
+.image-library-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
 }
 
 .image-manager-grid {
