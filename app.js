@@ -73,6 +73,7 @@ const recentPoemsSection = document.getElementById('recentPoemsSection');
 const recentPoemsList = document.getElementById('recentPoemsList');
 const poemModal = document.getElementById('poemModal');
 const modalTitle = document.getElementById('modalTitle');
+const modalPoemName = document.getElementById('modalPoemName');
 const modalContent = document.getElementById('modalContent');
 const closeModal = document.getElementById('closeModal');
 const modalContentElement = poemModal.querySelector('.modal-content');
@@ -2956,6 +2957,9 @@ function openPoemModal(poem) {
     chatHistory.hidden = true;
     toggleChatHistory.setAttribute('aria-expanded', 'false');
     modalTitle.textContent = poem.title;
+    // The poet falls back to the collection's, which the Miscellaneous shelf can
+    // leave unset, so the name stands alone rather than trailing a bare separator.
+    modalPoemName.textContent = [poem.title, getPoemAuthor(poem)].filter(Boolean).join(' · ');
     renderPoemContent(poem.content, poem.title);
     renderChatSession(currentChatSession);
     renderPoemImages(poem, currentChatSession);
