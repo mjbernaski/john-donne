@@ -11,3 +11,7 @@ poem-images/batch.log
 poem-images/deleted.json
 poem-images/manifest.json
 poem-images/manifest.json.tmp
+
+voice-config.json
+voice-config.json.tmp
+voice-samples/*.tmp

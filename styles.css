@@ -1013,6 +1013,154 @@ body {
     white-space: nowrap;
 }
 
+/* An anchor rather than a button, so it needs the line box a button gets free. */
+.random-poem--link {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.voice-roles {
+    padding: 20px 28px 0;
+}
+
+.voice-roles-title {
+    margin: 0 0 11px;
+    color: var(--text-light);
+    font: 700 0.72rem/1.2 var(--font-sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.voice-roles-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+}
+
+.voice-role {
+    display: grid;
+    gap: 3px;
+    padding: 13px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--card-bg);
+}
+
+.voice-role strong {
+    font: 600 1.05rem/1.2 var(--font-serif);
+    color: var(--primary-color);
+}
+
+.voice-role small,
+.voice-card-note {
+    color: var(--text-light);
+    font: 400 0.72rem/1.35 var(--font-sans);
+}
+
+.voice-sample-text {
+    margin: 0;
+    color: var(--text-light);
+    font: 400 0.72rem/1.35 var(--font-sans);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.voice-sample-text em {
+    color: var(--secondary-color);
+    font-family: var(--font-serif);
+    font-size: 0.92rem;
+}
+
+.voice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+    padding: 20px 28px 30px;
+}
+
+.voice-card {
+    display: grid;
+    align-content: start;
+    gap: 9px;
+    padding: 15px 16px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--card-bg);
+}
+
+.voice-card.is-assigned {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 2px rgba(139, 69, 19, 0.13);
+}
+
+.voice-card-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.voice-card-heading strong {
+    font: 600 1.1rem/1.2 var(--font-serif);
+    color: var(--primary-color);
+}
+
+.voice-card-heading small {
+    color: var(--secondary-color);
+    font: 700 0.62rem/1.2 var(--font-sans);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.voice-card-note {
+    margin: 0;
+    min-height: 2.7em;
+}
+
+.voice-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.voice-play {
+    flex: 0 0 auto;
+    padding: 8px 15px;
+    border: 1px solid #8b2f29;
+    border-radius: 8px;
+    background: #8b2f29;
+    color: white;
+    cursor: pointer;
+    font: 700 0.68rem/1.2 var(--font-sans);
+}
+
+.voice-play:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.voice-assign {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 9px;
+    border: 1px solid #baa994;
+    border-radius: 8px;
+    background: white;
+    color: var(--secondary-color);
+    cursor: pointer;
+    font: 600 0.68rem/1.2 var(--font-sans);
+}
+
+/* Pinned so a sample stays playable while the grid is scrolled. */
+.voice-player {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    width: calc(100% - 56px);
+    margin: 0 28px 22px;
+}
+
 .image-manager-page {
     min-height: 100vh;
     background: var(--bg-color);

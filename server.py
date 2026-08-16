@@ -69,7 +69,34 @@ GEMINI_TTS_URL = (
     f"https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_TTS_MODEL}:generateContent"
 )
-TTS_VOICES = {"feminine": "Gacrux", "masculine": "Algieba", "companion": "Iapetus"}
+# Gemini's prebuilt voices, with the character each one is published under.
+# There is no endpoint that lists them, so the catalogue is written out here; a
+# name Gemini no longer recognises simply fails its own sample and says so on the
+# card, rather than breaking the panel.
+GEMINI_VOICES = (
+    ("Zephyr", "Bright"), ("Puck", "Upbeat"), ("Charon", "Informative"),
+    ("Kore", "Firm"), ("Fenrir", "Excitable"), ("Leda", "Youthful"),
+    ("Orus", "Firm"), ("Aoede", "Breezy"), ("Callirrhoe", "Easy-going"),
+    ("Autonoe", "Bright"), ("Enceladus", "Breathy"), ("Iapetus", "Clear"),
+    ("Umbriel", "Easy-going"), ("Algieba", "Smooth"), ("Despina", "Smooth"),
+    ("Erinome", "Clear"), ("Algenib", "Gravelly"), ("Rasalgethi", "Informative"),
+    ("Laomedeia", "Upbeat"), ("Achernar", "Soft"), ("Alnilam", "Firm"),
+    ("Schedar", "Even"), ("Gacrux", "Mature"), ("Pulcherrima", "Forward"),
+    ("Achird", "Friendly"), ("Zubenelgenubi", "Casual"), ("Vindemiatrix", "Gentle"),
+    ("Sadachbia", "Lively"), ("Sadaltager", "Knowledgeable"), ("Sulafat", "Warm"),
+)
+GEMINI_VOICE_NAMES = {name for name, _ in GEMINI_VOICES}
+# The roles the app narrates with. These are the defaults; the audition panel can
+# rebind any of them, and the choice is kept in voice-config.json.
+DEFAULT_TTS_VOICES = {"feminine": "Gacrux", "masculine": "Algieba", "companion": "Iapetus"}
+VOICE_CONFIG_PATH = BASE_DIR / "voice-config.json"
+VOICE_CONFIG_LOCK = threading.Lock()
+# One short, identical passage for every voice, so they can be compared directly.
+# The samples live apart from the reading library and are committed with the
+# source: they depend on nothing local, and auditioning voices on a fresh
+# checkout should not mean paying Gemini for thirty renders again.
+VOICE_SAMPLE_TEXT = "Two roads diverged in a yellow wood,\nAnd sorry I could not travel both"
+VOICE_SAMPLES_PATH = BASE_DIR / "voice-samples"
 ALLOWED_GET_PATHS = {"/status"}
 ALLOWED_POST_PATHS = {"/generate"}
 ALLOWED_CHAT_GET_PATHS = {"/v1/models"}
@@ -181,22 +208,48 @@ def image_poem_metadata() -> dict[str, dict]:
     return metadata
 
 
+def load_tts_voices() -> dict[str, str]:
+    """The role-to-voice bindings, with anything unrecognised falling back to default."""
+    try:
+        with VOICE_CONFIG_LOCK:
+            saved = json.loads(VOICE_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return dict(DEFAULT_TTS_VOICES)
+    if not isinstance(saved, dict):
+        return dict(DEFAULT_TTS_VOICES)
+    return {
+        role: saved[role] if saved.get(role) in GEMINI_VOICE_NAMES else default
+        for role, default in DEFAULT_TTS_VOICES.items()
+    }
+
+
+def write_tts_voices(voices: dict[str, str]) -> None:
+    with VOICE_CONFIG_LOCK:
+        temporary = VOICE_CONFIG_PATH.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(voices, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(VOICE_CONFIG_PATH)
+
+
 def audio_library_key(title: str, text: str, voice: str, kind: str, book_id: str) -> str:
     """Identify the exact performance request across browsers and server restarts."""
-    identity = json.dumps(
-        {
-            "model": GEMINI_TTS_MODEL,
-            "title": title,
-            "text": text,
-            "voice": voice,
-            "kind": kind,
-            "book": book_id,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    identity = {
+        "model": GEMINI_TTS_MODEL,
+        "title": title,
+        "text": text,
+        "voice": voice,
+        "kind": kind,
+        "book": book_id,
+    }
+    # The role is what the key has always carried, so a rebound role would other-
+    # wise keep serving readings performed by the voice it used to point at. Name
+    # the voice as well, but only once it stops being that role's default, so the
+    # library built up under the defaults stays addressable.
+    resolved = load_tts_voices().get(voice)
+    if resolved and resolved != DEFAULT_TTS_VOICES.get(voice):
+        identity["voiceName"] = resolved
+    return hashlib.sha256(
+        json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def cache_audio(filename: str, audio: bytes, key: str | None = None) -> str:
@@ -236,6 +289,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/images.html"
             super().do_GET()
             return
+        if self.path.rstrip("/") == "/voices":
+            self.path = "/voices.html"
+            super().do_GET()
+            return
+        if self.path == "/api/tts/voices":
+            self._list_tts_voices()
+            return
         if self.path == "/api/image-library":
             self._list_image_library()
             return
@@ -262,10 +322,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_PUT(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path == "/api/tts/roles":
+            self._assign_tts_voice()
+            return
         if self.path.startswith("/api/poems/"):
             self._update_user_poem(self.path.removeprefix("/api/poems/"))
             return
-        self.send_error(405, "PUT is only supported for the shared shelf")
+        self.send_error(405, "PUT is only supported for the shared shelf and narration voices")
 
     def do_DELETE(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/api/image-library":
@@ -483,6 +546,9 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/tts/lookup":
             self._lookup_tts()
             return
+        if self.path == "/api/tts/sample":
+            self._tts_sample()
+            return
         if self.path == "/api/poems":
             self._add_user_poem()
             return
@@ -508,7 +574,7 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         title = str(payload.get("title", "")).strip()
         text = str(payload.get("text", "")).strip()
         voice_id = str(payload.get("voice", ""))
-        voice = TTS_VOICES.get(voice_id)
+        voice = load_tts_voices().get(voice_id)
         kind = str(payload.get("kind", "poem"))
         if not title or not text or not voice or kind not in {"poem", "response"}:
             raise ValueError("title, text, kind, and a supported voice are required.")
@@ -547,6 +613,107 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError) as error:
             self._send_json(400, {"error": str(error)})
 
+    @staticmethod
+    def _voice_sample_file(voice: str) -> Path:
+        """Named for the voice, stamped with what it says.
+
+        Samples sit outside the role bindings and outside the reading library.
+        The stamp is what the passage and the model hash to, so changing either
+        renames every file and the old renders read as absent rather than being
+        served as though they were current.
+        """
+        identity = json.dumps(
+            {"model": GEMINI_TTS_MODEL, "sample": VOICE_SAMPLE_TEXT},
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        )
+        stamp = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
+        return VOICE_SAMPLES_PATH / f"{voice}-{stamp}.wav"
+
+    def _list_tts_voices(self) -> None:
+        roles = load_tts_voices()
+        voices = [
+            {
+                "name": name,
+                "character": character,
+                "sampled": self._voice_sample_file(name).exists(),
+                "roles": sorted(role for role, bound in roles.items() if bound == name),
+            }
+            for name, character in GEMINI_VOICES
+        ]
+        self._send_json(200, {
+            "voices": voices,
+            "roles": roles,
+            "defaults": DEFAULT_TTS_VOICES,
+            "sampleText": VOICE_SAMPLE_TEXT,
+        })
+
+    def _tts_sample(self) -> None:
+        """Read one voice's sample from the library, generating it the first time."""
+        try:
+            voice = str(self._read_json_body().get("voice", ""))
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "The sample request was not valid JSON."})
+            return
+        if voice not in GEMINI_VOICE_NAMES:
+            self._send_json(400, {"error": f"{voice or 'That voice'} is not a known Gemini voice."})
+            return
+
+        sample_file = self._voice_sample_file(voice)
+        filename = f"Voice sample - {voice}"
+        if sample_file.exists():
+            audio = sample_file.read_bytes()
+            self._send_tts_audio(audio, cache_audio(filename, audio), reused=True)
+            return
+        api_key = GEMINI_API_KEY or self.headers.get("X-Gemini-API-Key", "")
+        if not api_key:
+            self._send_json(401, {"error": "A Gemini API key is required."})
+            return
+        try:
+            prompt = (
+                "Synthesize speech for an exact literary reading. Do not speak these directions.\n\n"
+                "AUDIO PROFILE: A reader of poetry performing two lines aloud so that the voice itself "
+                "can be judged.\nDIRECTOR'S NOTES: Measured and natural, with a light rhetorical lift at "
+                "the line ending. Do not add, omit, explain, or repeat any words.\n\n"
+                f"TRANSCRIPT — SPEAK ONLY THE TEXT BELOW\n{VOICE_SAMPLE_TEXT}"
+            )
+            pcm = self._request_gemini_audio(api_key, voice, prompt)
+            audio_buffer = io.BytesIO()
+            with wave.open(audio_buffer, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(24000)
+                wav_file.writeframes(pcm)
+            audio = audio_buffer.getvalue()
+            VOICE_SAMPLES_PATH.mkdir(exist_ok=True)
+            temporary = sample_file.with_suffix(".tmp")
+            temporary.write_bytes(audio)
+            temporary.replace(sample_file)
+            self._send_tts_audio(audio, cache_audio(filename, audio), reused=False)
+        except HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            self._send_json(error.code, {"error": f"Gemini rejected {voice}: {detail[:300]}"})
+        except (URLError, TimeoutError) as error:
+            self._send_json(502, {"error": f"Gemini TTS unavailable: {getattr(error, 'reason', error)}"})
+
+    def _assign_tts_voice(self) -> None:
+        try:
+            payload = self._read_json_body()
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "The assignment was not valid JSON."})
+            return
+        role = str(payload.get("role", ""))
+        voice = str(payload.get("voice", ""))
+        if role not in DEFAULT_TTS_VOICES:
+            self._send_json(400, {"error": f"{role or 'That role'} is not a narration role."})
+            return
+        if voice not in GEMINI_VOICE_NAMES:
+            self._send_json(400, {"error": f"{voice or 'That voice'} is not a known Gemini voice."})
+            return
+        roles = load_tts_voices()
+        roles[role] = voice
+        write_tts_voices(roles)
+        self._send_json(200, {"roles": roles})
+
     def _generate_tts(self) -> None:
         try:
             payload = self._read_json_body()
@@ -559,7 +726,7 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             if not api_key:
                 self._send_json(401, {"error": "A Gemini API key is required."})
                 return
-            voice = TTS_VOICES[voice_id]
+            voice = load_tts_voices()[voice_id]
             pcm_chunks = []
             chunks = self._split_tts_text(text)
             for index, chunk in enumerate(chunks):

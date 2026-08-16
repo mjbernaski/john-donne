@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Narration Voices · Poetry</title>
+    <link rel="stylesheet" href="styles.css?v=20260815-41">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="image-manager-page">
+    <header class="image-manager-header">
+        <div>
+            <p class="poem-images-eyebrow">Narration</p>
+            <h1>Voices</h1>
+            <p id="voicesStatus" class="image-library-status" role="status" aria-live="polite">Loading voices…</p>
+        </div>
+        <a href="/" class="image-manager-home">Return to poems</a>
+    </header>
+
+    <main>
+        <section class="voice-roles" aria-labelledby="voiceRolesTitle">
+            <h2 id="voiceRolesTitle" class="voice-roles-title">In use now</h2>
+            <div id="voiceRoles" class="voice-roles-list"></div>
+        </section>
+
+        <div class="image-library-toolbar image-manager-toolbar">
+            <p class="voice-sample-text">Every voice reads the same two lines: <em id="voiceSampleText"></em></p>
+            <div class="image-manager-actions">
+                <button id="voicesPrepare" class="image-manager-refresh" type="button">Prepare every sample</button>
+                <button id="voicesRefresh" class="image-manager-refresh" type="button">Refresh</button>
+            </div>
+        </div>
+
+        <div id="voicesGrid" class="voice-grid"></div>
+    </main>
+
+    <audio id="voicePlayer" class="voice-player" controls preload="none"></audio>
+
+    <script src="voices.js?v=20260815-41"></script>
+</body>
+</html>
