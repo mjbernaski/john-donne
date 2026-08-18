@@ -1017,6 +1017,7 @@ body {
 .random-poem--link {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     text-decoration: none;
 }
 
@@ -2688,6 +2689,14 @@ body {
     .paste-actions {
         align-items: stretch;
         flex-direction: column-reverse;
+        gap: 10px;
+    }
+
+    /* The row has to stack too, or the full-width submit below claims a whole
+       line inside it and pushes the voice select and Read it aloud off-screen. */
+    .paste-buttons {
+        align-items: stretch;
+        flex-direction: column;
         gap: 10px;
     }
 
