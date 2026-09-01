@@ -12,6 +12,7 @@ const IMAGE_STEER_STORAGE = 'john-donne-image-steer';
 const USER_POEMS_STORAGE = 'john-donne-user-poems';
 const VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
 const POEM_VOICES = ['feminine', 'masculine'];
+const NARRATION_PART_LIMIT = 1800;
 let selectedStyleLabels = new Set();
 let editingPoem = null;
 const RECENT_POEMS_LIMIT = 8;
@@ -101,6 +102,8 @@ const clearImageStyles = document.getElementById('clearImageStyles');
 const poemImagesStatus = document.getElementById('poemImagesStatus');
 const poemImagesGrid = document.getElementById('poemImagesGrid');
 const poemVoice = document.getElementById('poemVoice');
+const poemAudioPart = document.getElementById('poemAudioPart');
+const poemAudioPartLabel = document.getElementById('poemAudioPartLabel');
 const generateAudio = document.getElementById('generateAudio');
 const playSavedAudio = document.getElementById('playSavedAudio');
 const followReading = document.getElementById('followReading');
@@ -968,8 +971,9 @@ function downloadableAudioUrl(url) {
     return `${url}${url.includes('?') ? '&' : '?'}download=1`;
 }
 
-function getPoemAudioKey(poem, voice) {
-    return `poem:${stableHash(`${poem.title}\n${poem.content}`)}:${voice}`;
+function getPoemAudioKey(poem, voice, part = null, partIndex = 0) {
+    const text = part ?? poem.content;
+    return `poem:${stableHash(`${poem.title}\n${text}`)}:${voice}:${partIndex}`;
 }
 
 function getResponseAudioKey(poem, content) {
@@ -1479,6 +1483,21 @@ function messageText(content) {
     return content.filter(part => part.type === 'text').map(part => part.text).join('\n');
 }
 
+// Some reasoning models include their private scratch work in content using
+// <think> or <analysis> tags. Keep it out of the UI, saved conversations, TTS,
+// and later turns. An unfinished block is withheld while the stream continues.
+function responseText(content) {
+    const text = messageText(content);
+    return text
+        .replace(/<(think|analysis)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+        .replace(/<(think|analysis)\b[^>]*>[\s\S]*$/gi, '')
+        .replace(/<\/(?:think|analysis)\s*>/gi, '')
+        // Do not briefly display a tag while its opening token is split across
+        // streaming chunks (for example "<thi" followed by "nk>").
+        .replace(/<(?:t(?:h(?:i(?:n(?:k)?)?)?)?|a(?:n(?:a(?:l(?:y(?:s(?:i(?:s)?)?)?)?)?)?)?)?$/i, '')
+        .trimStart();
+}
+
 function messageImages(content) {
     if (!Array.isArray(content)) return [];
     return content
@@ -1497,7 +1516,7 @@ function appendChatMessage(role, content, pending = false, options = {}) {
 
     const body = document.createElement('div');
     body.className = 'chat-message-body';
-    body.textContent = messageText(content);
+    body.textContent = role === 'assistant' ? responseText(content) : messageText(content);
 
     message.append(label, body);
 
@@ -1511,7 +1530,7 @@ function appendChatMessage(role, content, pending = false, options = {}) {
     });
 
     if (role === 'assistant' && !pending && options.listen !== false) {
-        addChatListenControl(message, messageText(content), options.session || currentChatSession);
+        addChatListenControl(message, responseText(content), options.session || currentChatSession);
     }
     chatMessages.appendChild(message);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1706,7 +1725,7 @@ async function getApiError(response) {
 async function readStreamingCompletion(response, onToken) {
     if (!response.body) {
         const payload = await response.json();
-        const content = payload.choices?.[0]?.message?.content || '';
+        const content = responseText(payload.choices?.[0]?.message?.content || '');
         onToken(content);
         return content;
     }
@@ -1715,6 +1734,7 @@ async function readStreamingCompletion(response, onToken) {
     const decoder = new TextDecoder();
     let buffer = '';
     let completeText = '';
+    let visibleText = '';
 
     const processLine = line => {
         const trimmed = line.trim();
@@ -1727,7 +1747,11 @@ async function readStreamingCompletion(response, onToken) {
             const token = payload.choices?.[0]?.delta?.content || '';
             if (token) {
                 completeText += token;
-                onToken(completeText);
+                const nextVisibleText = responseText(completeText);
+                if (nextVisibleText !== visibleText) {
+                    visibleText = nextVisibleText;
+                    onToken(visibleText);
+                }
             }
         } catch (error) {
             console.warn('Ignored malformed streaming event:', error);
@@ -1746,7 +1770,7 @@ async function readStreamingCompletion(response, onToken) {
 
     buffer += decoder.decode();
     if (buffer) processLine(buffer);
-    return completeText;
+    return responseText(completeText);
 }
 
 async function sendChatMessage(event) {
@@ -1783,10 +1807,13 @@ async function sendChatMessage(event) {
                 model,
                 messages: [
                     { role: 'system', content: buildPoemSystemPrompt(poem) },
-                    ...session.messages
+                    ...session.messages.map(message => message.role === 'assistant'
+                        ? { ...message, content: responseText(message.content) }
+                        : message)
                 ],
                 temperature: 0.7,
                 max_tokens: isBriefMode() ? 320 : 1200,
+                chat_template_kwargs: { enable_thinking: false },
                 stream: true,
                 user: session.id
             })
@@ -1904,6 +1931,7 @@ async function describePoemScene(poem) {
                 ],
                 temperature: 0.6,
                 max_tokens: 200,
+                chat_template_kwargs: { enable_thinking: false },
                 stream: false
             })
         });
@@ -2618,7 +2646,20 @@ function setPoemAudioStatus(message, state = '') {
     poemAudioStatus.dataset.state = state;
 }
 
-async function requestGeminiTts(title, text, voice, kind = 'poem', filename = '', lookupOnly = false) {
+function formatCompactDuration(seconds) {
+    const totalSeconds = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainder = totalSeconds % 60;
+    return minutes ? `${minutes}m ${String(remainder).padStart(2, '0')}s` : `${remainder}s`;
+}
+
+function formatFileSize(bytes) {
+    return bytes >= 1024 * 1024
+        ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+async function requestGeminiTts(title, text, voice, kind = 'poem', filename = '', lookupOnly = false, onStage = null) {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     const apiKey = getGeminiApiKey();
     if (apiKey) headers.set('X-Gemini-API-Key', apiKey);
@@ -2633,10 +2674,13 @@ async function requestGeminiTts(title, text, voice, kind = 'poem', filename = ''
     }
     if (lookupOnly && response.status === 404) return null;
     if (!response.ok) throw new Error(await getApiError(response));
+    onStage?.('receiving');
+    const blob = await response.blob();
+    onStage?.('received', blob);
     // The server also parks the reading at a named path, so the browser's own
     // player menu downloads it as a title rather than as "download.wav".
     return {
-        blob: await response.blob(),
+        blob,
         namedPath: response.headers.get('X-Audio-Path') || '',
         reused: response.headers.get('X-Audio-Reused') === 'true'
     };
@@ -2743,34 +2787,100 @@ function addChatListenControl(messageElement, content, session, autoPlay = false
     if (autoPlay) playResponse();
 }
 
-async function restorePoemAudio(poem, session, voice) {
-    if (session.audioRestoringVoices.has(voice)) return;
-    session.audioRestoringVoices.add(voice);
+function getNarrationParts(poem) {
+    const text = getReadablePoemText(poem);
+    if (text.length <= NARRATION_PART_LIMIT) return [text];
+    const parts = [];
+    let current = '';
+    for (const paragraph of text.split(/\n\n+/)) {
+        const sections = [];
+        if (paragraph.length <= NARRATION_PART_LIMIT) {
+            sections.push(paragraph);
+        } else {
+            let remaining = paragraph;
+            while (remaining.length > NARRATION_PART_LIMIT) {
+                let splitAt = remaining.lastIndexOf(' ', NARRATION_PART_LIMIT);
+                if (splitAt < NARRATION_PART_LIMIT * 0.6) splitAt = NARRATION_PART_LIMIT;
+                sections.push(remaining.slice(0, splitAt).trim());
+                remaining = remaining.slice(splitAt).trim();
+            }
+            if (remaining) sections.push(remaining);
+        }
+        for (const section of sections) {
+            const candidate = `${current}\n\n${section}`.trim();
+            if (current && candidate.length > NARRATION_PART_LIMIT) {
+                parts.push(current);
+                current = section;
+            } else {
+                current = candidate;
+            }
+        }
+    }
+    if (current) parts.push(current);
+    return parts;
+}
+
+function selectedNarrationPart(poem, voice = poemVoice.value) {
+    const parts = getNarrationParts(poem);
+    const index = Math.min(Number(poemAudioPart.value) || 0, parts.length - 1);
+    return { parts, index, text: parts[index], slot: `${voice}:${index}:${parts.length}` };
+}
+
+function renderNarrationPartOptions(poem) {
+    const parts = getNarrationParts(poem);
+    poemAudioPart.replaceChildren(...parts.map((part, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = `Part ${index + 1} of ${parts.length}`;
+        return option;
+    }));
+    poemAudioPart.value = '0';
+    const segmented = parts.length > 1;
+    poemAudioPart.hidden = !segmented;
+    poemAudioPartLabel.hidden = !segmented;
+    followReading.hidden = segmented;
+    if (segmented) {
+        followReading.setAttribute('aria-pressed', 'false');
+        clearReadingPosition();
+    }
+}
+
+async function restorePoemAudio(poem, session, voice, partIndex = null) {
+    const parts = getNarrationParts(poem);
+    const index = partIndex ?? (Number(poemAudioPart.value) || 0);
+    const part = parts[index];
+    const slot = `${voice}:${index}:${parts.length}`;
+    if (session.audioRestoringVoices.has(slot)) return;
+    session.audioRestoringVoices.add(slot);
     try {
-        const audioKey = getPoemAudioKey(poem, voice);
+        const audioKey = getPoemAudioKey(poem, voice, part, index);
         const storedBlob = await getStoredAudio(audioKey);
-        if (storedBlob && !session.audioByVoice.has(voice)) {
-            session.audioByVoice.set(voice, URL.createObjectURL(storedBlob));
-        } else if (!storedBlob && !session.audioByVoice.has(voice)) {
-            const downloadName = buildDownloadName(poem, [VOICE_NAMES[voice] || voice], 'wav');
+        if (storedBlob && !session.audioByVoice.has(slot)) {
+            session.audioByVoice.set(slot, URL.createObjectURL(storedBlob));
+        } else if (!storedBlob && !session.audioByVoice.has(slot)) {
+            const partName = parts.length > 1 ? `Part ${index + 1}` : '';
+            const downloadName = buildDownloadName(poem, [partName, VOICE_NAMES[voice] || voice].filter(Boolean), 'wav');
             const existing = await requestGeminiTts(
-                poem.title, getReadablePoemText(poem), voice, 'poem', downloadName, true
+                parts.length > 1 ? `${poem.title} · Part ${index + 1}` : poem.title,
+                part, voice, 'poem', downloadName, true
             );
             if (existing) {
                 await storeAudio(audioKey, existing.blob, {
                     kind: 'poem',
                     poemTitle: poem.title,
-                    voice
+                    voice,
+                    part: index + 1,
+                    parts: parts.length
                 });
-                session.audioByVoice.set(voice, existing.namedPath || URL.createObjectURL(existing.blob));
+                session.audioByVoice.set(slot, existing.namedPath || URL.createObjectURL(existing.blob));
             }
         }
     } finally {
-        session.audioCheckedVoices.add(voice);
-        session.audioRestoringVoices.delete(voice);
+        session.audioCheckedVoices.add(slot);
+        session.audioRestoringVoices.delete(slot);
         if (currentPoem === poem && currentChatSession === session) {
             updatePoemVoiceOptions(session);
-            if (poemVoice.value === voice) renderPoemAudio(session);
+            if (poemVoice.value === voice && Number(poemAudioPart.value || 0) === index) renderPoemAudio(session);
         }
     }
 }
@@ -2780,15 +2890,17 @@ function updatePoemVoiceOptions(session) {
         feminine: 'Feminine · mature',
         masculine: 'Masculine · smooth'
     };
+    const { parts, index } = selectedNarrationPart(currentPoem);
     Array.from(poemVoice.options).forEach(option => {
-        const saved = session.audioByVoice.has(option.value) ? ' · reading saved' : '';
+        const saved = session.audioByVoice.has(`${option.value}:${index}:${parts.length}`) ? ' · part saved' : '';
         option.textContent = `${labels[option.value] || option.value}${saved}`;
     });
 }
 
 function renderPoemAudio(session) {
     const voice = poemVoice.value;
-    const cachedAudio = session.audioByVoice.get(voice);
+    const { parts, index, text, slot } = selectedNarrationPart(currentPoem, voice);
+    const cachedAudio = session.audioByVoice.get(slot);
     updatePoemVoiceOptions(session);
     poemAudioPlayer.pause();
     clearReadingPosition();
@@ -2798,12 +2910,12 @@ function renderPoemAudio(session) {
         setDownloadLink(
             downloadAudio,
             downloadableAudioUrl(cachedAudio),
-            buildDownloadName(currentPoem, [VOICE_NAMES[voice] || voice], 'wav')
+            buildDownloadName(currentPoem, [parts.length > 1 ? `Part ${index + 1}` : '', VOICE_NAMES[voice] || voice].filter(Boolean), 'wav')
         );
         generateAudio.hidden = true;
         playSavedAudio.hidden = false;
         setPoemAudioStatus(
-            voice === 'feminine' ? 'Gacrux · mature feminine voice' : 'Algieba · smooth masculine voice',
+            `${parts.length > 1 ? `Part ${index + 1} of ${parts.length} · ` : ''}${text.length.toLocaleString()} characters · saved · ${voice === 'feminine' ? 'Gacrux · mature feminine voice' : 'Algieba · smooth masculine voice'}`,
             'ready'
         );
     } else {
@@ -2813,28 +2925,34 @@ function renderPoemAudio(session) {
         poemAudioPlayer.load();
         poemAudioPlayer.hidden = true;
         setDownloadLink(downloadAudio, '', '');
-        if (!session.audioCheckedVoices.has(voice)) {
+        if (!session.audioCheckedVoices.has(slot)) {
             generateAudio.textContent = 'Checking saved reading…';
-            setPoemAudioStatus('Looking for an earlier performance in this browser and the shared library…', 'working');
+            setPoemAudioStatus(
+                `${parts.length > 1 ? `Part ${index + 1} of ${parts.length} · ` : ''}${text.length.toLocaleString()} characters · checking browser and shared audio libraries…`,
+                'working'
+            );
             generateAudio.disabled = true;
             poemVoice.disabled = session.audioLoading;
-            if (!session.audioRestoringVoices.has(voice)) {
-                restorePoemAudio(currentPoem, session, voice).catch(error => {
+            poemAudioPart.disabled = session.audioLoading;
+            if (!session.audioRestoringVoices.has(slot)) {
+                restorePoemAudio(currentPoem, session, voice, index).catch(error => {
                     console.warn(`Could not check the saved ${voice} reading:`, error);
                 });
             }
             return;
         }
-        generateAudio.textContent = 'Read poem';
+        generateAudio.textContent = parts.length > 1 ? `Read part ${index + 1}` : 'Read poem';
         setPoemAudioStatus(
-            voice === 'feminine'
+            `${parts.length > 1 ? `Part ${index + 1} of ${parts.length} · ` : ''}${text.length.toLocaleString()} characters · `
+            + (voice === 'feminine'
                 ? 'Gacrux offers a mature, composed reading.'
-                : 'Algieba offers a smooth, measured reading.',
+                : 'Algieba offers a smooth, measured reading.'),
             'idle'
         );
     }
     generateAudio.disabled = session.audioLoading;
     poemVoice.disabled = session.audioLoading;
+    poemAudioPart.disabled = session.audioLoading;
 }
 
 async function generatePoemReading() {
@@ -2842,8 +2960,9 @@ async function generatePoemReading() {
     const session = currentChatSession;
     const voice = poemVoice.value;
     if (!poem || !session || session.audioLoading) return;
+    const { parts, index, text, slot } = selectedNarrationPart(poem, voice);
 
-    const cachedAudio = session.audioByVoice.get(voice);
+    const cachedAudio = session.audioByVoice.get(slot);
     if (cachedAudio) {
         playSavedPoemReading();
         return;
@@ -2852,23 +2971,51 @@ async function generatePoemReading() {
     session.audioLoading = true;
     generateAudio.disabled = true;
     poemVoice.disabled = true;
+    poemAudioPart.disabled = true;
     generateAudio.textContent = 'Preparing…';
-    setPoemAudioStatus('Gemini is preparing the performance. Long poems are read in joined sections…', 'working');
+    const startedAt = Date.now();
+    const estimatedAudioSeconds = Math.max(10, Math.round(text.length / 15));
+    const partDetail = parts.length > 1 ? `Part ${index + 1} of ${parts.length}` : 'Complete reading';
+    const voiceName = VOICE_NAMES[voice] || voice;
+    let generationStage = 'sending text to Gemini';
+    const showGenerationProgress = () => {
+        if (currentChatSession !== session || !session.audioLoading) return;
+        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        setPoemAudioStatus(
+            `${partDetail} · ${text.length.toLocaleString()} characters · `
+            + `about ${formatCompactDuration(estimatedAudioSeconds)} of audio · ${voiceName} · `
+            + `${generationStage} · ${formatCompactDuration(elapsed)} elapsed`,
+            'working'
+        );
+    };
+    showGenerationProgress();
+    const progressTimer = window.setInterval(showGenerationProgress, 1000);
 
     try {
-        const downloadName = buildDownloadName(poem, [VOICE_NAMES[voice] || voice], 'wav');
+        const partName = parts.length > 1 ? `Part ${index + 1}` : '';
+        const downloadName = buildDownloadName(poem, [partName, VOICE_NAMES[voice] || voice].filter(Boolean), 'wav');
         const { blob: audioBlob, namedPath } = await requestGeminiTts(
-            poem.title, getReadablePoemText(poem), voice, 'poem', downloadName
+            parts.length > 1 ? `${poem.title} · Part ${index + 1}` : poem.title,
+            text, voice, 'poem', downloadName, false, (stage, blob) => {
+                generationStage = stage === 'receiving'
+                    ? 'Gemini responded; downloading audio'
+                    : `audio received (${formatFileSize(blob.size)}); saving locally`;
+                showGenerationProgress();
+            }
         );
-        const saved = await storeAudio(getPoemAudioKey(poem, voice), audioBlob, {
+        generationStage = 'saving audio in the browser';
+        showGenerationProgress();
+        const saved = await storeAudio(getPoemAudioKey(poem, voice, text, index), audioBlob, {
             kind: 'poem',
             poemTitle: poem.title,
-            voice
+            voice,
+            part: index + 1,
+            parts: parts.length
         });
         // Prefer the server's named path so the player's own download menu
         // sees a filename; a blob URL always saves as "download.wav".
         const playbackUrl = namedPath || URL.createObjectURL(audioBlob);
-        session.audioByVoice.set(voice, playbackUrl);
+        session.audioByVoice.set(slot, playbackUrl);
         poemAudioPlayer.src = playbackUrl;
         poemAudioPlayer.hidden = false;
         generateAudio.hidden = true;
@@ -2876,8 +3023,8 @@ async function generatePoemReading() {
         setDownloadLink(downloadAudio, downloadableAudioUrl(playbackUrl), downloadName);
         setPoemAudioStatus(
             saved
-                ? 'Reading ready and saved for future visits. Use the player to pause, seek, or replay.'
-                : 'Reading ready for this visit. Browser storage was unavailable.',
+                ? `${partDetail} ready · ${formatFileSize(audioBlob.size)} · generated in ${formatCompactDuration((Date.now() - startedAt) / 1000)} · saved for future visits.`
+                : `${partDetail} ready · ${formatFileSize(audioBlob.size)} · generated in ${formatCompactDuration((Date.now() - startedAt) / 1000)} · browser storage unavailable.`,
             saved ? 'ready' : 'error'
         );
         poemAudioPlayer.play().catch(() => {});
@@ -2886,11 +3033,13 @@ async function generatePoemReading() {
         setPoemAudioStatus(error.message, 'error');
         if (/Gemini API key/i.test(error.message)) pendingGeminiRetry = generatePoemReading;
     } finally {
+        window.clearInterval(progressTimer);
         session.audioLoading = false;
         if (currentChatSession === session) {
             generateAudio.disabled = false;
             poemVoice.disabled = false;
-            generateAudio.textContent = 'Read poem';
+            poemAudioPart.disabled = false;
+            generateAudio.textContent = parts.length > 1 ? `Read part ${index + 1}` : 'Read poem';
         }
     }
 }
@@ -2963,6 +3112,7 @@ function openPoemModal(poem) {
     renderPoemContent(poem.content, poem.title);
     renderChatSession(currentChatSession);
     renderPoemImages(poem, currentChatSession);
+    renderNarrationPartOptions(poem);
     renderPoemAudio(currentChatSession);
     setModalTab('read');
     // Check every offered performance up front so all previously generated
@@ -2970,7 +3120,7 @@ function openPoemModal(poem) {
     // each voice first.
     POEM_VOICES.forEach(voice => {
         if (!currentChatSession.audioCheckedVoices.has(voice)) {
-            restorePoemAudio(poem, currentChatSession, voice).catch(error => {
+            restorePoemAudio(poem, currentChatSession, voice, Number(poemAudioPart.value) || 0).catch(error => {
                 console.warn(`Could not check the saved ${voice} reading:`, error);
             });
         }
@@ -3111,6 +3261,9 @@ poemAudioPlayer.addEventListener('play', startReadingFollowTracking);
 poemAudioPlayer.addEventListener('pause', stopReadingFollowTracking);
 poemAudioPlayer.addEventListener('ended', clearReadingPosition);
 poemVoice.addEventListener('change', () => {
+    if (currentChatSession) renderPoemAudio(currentChatSession);
+});
+poemAudioPart.addEventListener('change', () => {
     if (currentChatSession) renderPoemAudio(currentChatSession);
 });
 saveGeminiApiKey.addEventListener('click', saveGeminiKey);

@@ -12,6 +12,7 @@ collections from the same interface.
 - **Baudelaire in Two Translations**: 68 pieces from the Huneker edition and 54 from Cyril Scott's verse rendering, kept apart so the same poem can be read in both hands
 - **Two Shakespeare Collections**: 41 selected soliloquies and, separately, the complete plays and poems arranged for reading by scene or individual poem
 - **Complete Shelley**: 312 reading entries from the three-volume Hutchinson Oxford edition, with long works divided by act or canto
+- **Perry Miller's New England Mind**: The 1939 intellectual history arranged as a foreword, sixteen chapters, and two appendices from Internet Archive OCR
 - **A Shelf of Your Own**: Paste any poem into the Miscellaneous collection and it gains the same companion, images, and narration as the rest
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
@@ -53,11 +54,12 @@ collections from the same interface.
 - `parse_shakespeare.py` - Python script to extract the curated soliloquies
 - `parse_shakespeare_complete.py` - Python script to transform the complete corpus JSON from `mjbernaski/shakespeare`
 - `parse_shelley.py` - Python script to extract the Shelley collection from Gutenberg ebook 4800 plain text
+- `parse_new_england_mind.py` - Python script to clean and divide the Internet Archive OCR of Perry Miller's 1939 study
 
 ## Collections
 
 The site does not hard-code a single poet. On load it reads `books.json` and
-builds a switcher in the header from it. Today eight collections are listed:
+builds a switcher in the header from it. The configured collections are listed below:
 
 | Collection | Poems file | Source |
 | --- | --- | --- |
@@ -68,6 +70,7 @@ builds a switcher in the header from it. Today eight collections are listed:
 | Shakespeare's Soliloquies | `poems-shakespeare.json` | Gutenberg ebook 100 — 41 selected speeches |
 | Shakespeare · Complete | `poems-shakespeare-complete.json` | Gutenberg ebook 100 — complete corpus arranged by sonnet, scene, and long poem |
 | The Complete Poetical Works of Percy Bysshe Shelley | `poems-shelley.json` | Hutchinson Oxford edition, 1914 — Gutenberg ebook 4800 — 312 entries |
+| The New England Mind: The Seventeenth Century | `poems-new-england-mind.json` | Macmillan first edition, 1939 — Internet Archive DLI scan — 19 entries |
 | Miscellaneous | none — browser storage | The reader, not a Gutenberg ebook — poems pasted in by hand |
 
 Choosing a collection swaps the poems, the page's titles and description, the
@@ -367,9 +370,10 @@ local server (recommended), or enter it once in the narration panel:
 GEMINI_API_KEY=gemini-key FLUX_API_KEY=flux-key python3 server.py
 ```
 
-The narration proxy breaks long poems at stanza boundaries, synthesizes each
-section with consistent performance direction, and joins the PCM output into a
-single WAV player. The feminine option uses the mature Gacrux voice; the
+Long works are divided in the browser into separately playable parts of roughly
+1,800 characters. Each part is generated and cached independently, so a failed
+request does not discard an entire chapter and a reader can resume later. Short
+poems remain a single recording. The feminine option uses the mature Gacrux voice; the
 masculine option uses the smooth Algieba voice. Each completed model response
 also has its own listen control using the distinct, clear Iapetus voice. The
 WAV performances are stored in IndexedDB and automatically reused for the same
