@@ -20,7 +20,6 @@ const IMAGE_API_KEY_STORAGE = 'john-donne-flux-api-key';
 const GEMINI_API_KEY_STORAGE = 'john-donne-gemini-api-key';
 const BRIEF_MODE_STORAGE = 'john-donne-chat-brief';
 const READ_REPLIES_STORAGE = 'john-donne-chat-read-replies';
-const poemSceneCache = new Map();
 let poemImageLibrary = {};
 const AUDIO_DB_NAME = 'john-donne-media-v1';
 const AUDIO_STORE_NAME = 'audio';
@@ -1898,16 +1897,13 @@ function getPoemImageCount(poem) {
 
 // The image model renders any poem text it is shown, so the poem is distilled
 // into a purely visual scene before it reaches FLUX.
-async function describePoemScene(poem) {
-    const cached = poemSceneCache.get(poem.title);
-    if (cached) return cached;
-
+async function describePoemScene(poem, direction, steer, previousScenes = []) {
     const poemText = cleanPoemContent(poem.content, poem.title)
         .replace(/^\s*\d+(?=[\p{L}'‘’“"(&])/gmu, '')
         .replace(/\s+/g, ' ')
         .slice(0, 1400);
 
-    const pending = (async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
         const model = await resolveModel({});
         const response = await fetch(`${CHAT_PROXY_URL}/v1/chat/completions`, {
             method: 'POST',
@@ -1925,9 +1921,14 @@ async function describePoemScene(poem) {
                             // where the generator is actually told what it is looking at.
                             + 'Name the clothing every figure wears, in period dress that covers shoulders, arms, and legs. '
                             + 'Where two figures appear together, make them one man and one woman. '
-                            + 'Reply with the description only.'
+                            + 'Create a fresh interpretation with a different focal subject or action AND a different setting, viewpoint, or arrangement from earlier scenes. Changing only the art style, wording, lighting, or colors is insufficient. '
+                            + 'Do not specify an art style. Reply with the description only.'
                     },
-                    { role: 'user', content: `A poem by ${getPoemAuthor(poem)} titled ${poem.title}.\n\n${poemText}` }
+                    { role: 'user', content: `A poem by ${getPoemAuthor(poem)} titled ${poem.title}.\n\n${poemText}`
+                        + `\n\nInterpretation direction: ${direction}`
+                        + (steer ? `\nReader direction (takes precedence): ${steer}` : '')
+                        + (previousScenes.length ? `\n\nEarlier scenes to avoid repeating:\n${previousScenes.map((scene, index) => `${index + 1}. ${scene}`).join('\n')}` : '')
+                        + (attempt ? '\nYour last response repeated an earlier scene. Choose a different subject and composition.' : '') }
                 ],
                 temperature: 0.6,
                 max_tokens: 200,
@@ -1942,15 +1943,10 @@ async function describePoemScene(poem) {
             .replace(/\s+/g, ' ')
             .trim();
         if (!scene) throw new Error('The model returned no scene description.');
-        return scene;
-    })().catch(error => {
-        console.warn('Scene description unavailable; using style direction alone:', error);
-        poemSceneCache.delete(poem.title);
-        return '';
-    });
-
-    poemSceneCache.set(poem.title, pending);
-    return pending;
+        const normalize = value => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+        if (!previousScenes.some(previous => normalize(previous) === normalize(scene))) return scene;
+    }
+    throw new Error('The model repeated an earlier scene. Please try generating again.');
 }
 
 // The visual styles a reader can choose from in the Visual Companions panel.
@@ -2160,24 +2156,22 @@ function updateStyleSummary() {
     imageStylesSummary.textContent = `${chosen} style${chosen === 1 ? '' : 's'} selected.${note}`;
 }
 
-function getImagePrompts(poem, count, variationOffset = 0, scene = '') {
-    const directions = [
+const IMAGE_DIRECTIONS = [
         'Center the poem’s strongest symbolic image in an intimate, dramatic composition.',
         'Interpret its governing figure of speech as a surprising visual relationship between human figures and the natural world.',
-        'Place the emotional argument in an atmospheric early-seventeenth-century English setting with historically plausible details.',
+        'Place the emotional argument in a historically plausible setting appropriate to the poet and poem.',
         'Create a more abstract, dreamlike interpretation using light, shadow, scale, and celestial imagery.',
         'Compose a wide, cinematic culmination that unites the poem’s major images without becoming a literal collage.'
     ];
 
-    const styles = getSelectedStyles();
-    const steer = getSteerText();
-
-    return Array.from({ length: count }, (_, index) => {
+function getImagePrompts(poem, scenes, variationOffset = 0, styles = getSelectedStyles(), steer = getSteerText()) {
+    return scenes.map((scene, index) => {
         const variationIndex = variationOffset + index;
         const style = styles[variationIndex % styles.length];
-        const direction = directions[variationIndex % directions.length];
+        const direction = IMAGE_DIRECTIONS[variationIndex % IMAGE_DIRECTIONS.length];
         return {
             style: style.label,
+            scene,
             // The medium leads and is restated at the end: placed after the scene
             // description it was outweighed by it, and every style came out alike.
             prompt: `${style.prompt} The medium above governs the entire image. `
@@ -2505,15 +2499,38 @@ async function generatePoemImageSet() {
         return;
     }
 
-    setPoemImagesStatus('Reading the poem for its imagery…', 'working');
-    const scene = await describePoemScene(poem);
-    if (currentPoem !== poem || currentChatSession !== session) {
+    const count = getPoemImageCount(poem);
+    const variationOffset = session.images.length;
+    const styles = getSelectedStyles();
+    const steer = getSteerText();
+    // Older records lack a scene field; recover their subject from the saved prompt.
+    const previousScenes = session.images
+        .map(image => image.scene || image.prompt?.match(/Subject: (.*?) Every figure wears/s)?.[1])
+        .filter(Boolean);
+    const scenes = [];
+    try {
+        for (let index = 0; index < count; index++) {
+            setPoemImagesStatus(`Planning distinct image ${index + 1} of ${count}…`, 'working');
+            const direction = IMAGE_DIRECTIONS[(variationOffset + index) % IMAGE_DIRECTIONS.length];
+            const scene = await describePoemScene(poem, direction, steer, previousScenes);
+            if (currentPoem !== poem || currentChatSession !== session) {
+                session.imagesLoading = false;
+                return;
+            }
+            scenes.push(scene);
+            previousScenes.push(scene);
+        }
+    } catch (error) {
         session.imagesLoading = false;
+        if (currentChatSession === session) {
+            renderPoemImages(poem, session);
+            setPoemImagesStatus(`Could not plan distinct images: ${error.message}`, 'error');
+        }
         return;
     }
 
-    const prompts = getImagePrompts(poem, getPoemImageCount(poem), session.images.length, scene);
-    const newImages = prompts.map(({ prompt, style }) => ({ prompt, style, status: 'queued', jobId: null, filename: null }));
+    const prompts = getImagePrompts(poem, scenes, variationOffset, styles, steer);
+    const newImages = prompts.map(({ prompt, style, scene }) => ({ prompt, style, scene, status: 'queued', jobId: null, filename: null }));
     session.images.push(...newImages);
     renderPoemImages(poem, session);
     savePoemSession(poem, session);

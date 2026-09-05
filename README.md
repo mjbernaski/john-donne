@@ -289,10 +289,11 @@ file. That file is ignored by Git.
 
 Images are meant to carry no text. Sending the poem's own lines to FLUX made it
 render them onto pages and banners, so each poem is first distilled by the model
-server into a short visual scene description, and only that description reaches
-the image server. If the model server is unreachable, generation still proceeds
-from the style and composition direction alone — the poem's words are never sent
-to FLUX.
+server into a separate visual scene description for each image. Each scene uses
+a different focal subject or action and composition, with earlier scenes supplied
+to the model to avoid repetition even when a style repeats. Reader steering also
+guides scene planning. Only the visual descriptions reach the image server. If
+scene planning fails, the app reports the error before submitting any images.
 
 Wardrobe and pairing are stated affirmatively — "every figure wears complete
 period dress", "any couple is one man and one woman" — and placed directly after
