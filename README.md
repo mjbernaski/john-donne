@@ -510,4 +510,26 @@ by the reader and held in that reader's browser.
 
 ## License
 
-The source text is in the public domain. This web implementation is provided as-is for educational and personal use.
+Most source texts are in the public domain. The reader-supplied Anna Karenina translation retains its translators’ copyright. This web implementation is provided as-is for educational and personal use.
+
+## Anna Karenina import
+
+The supplied Pevear/Volokhonsky PDF is imported into
+`poems-anna-karenina.json` as 239 chapters across eight parts. Select Anna
+Karenina in the library or reader, then use the Part selector to narrow the
+chapter list. Chapters use the existing reading, narration, and discussion
+features.
+
+To regenerate with a Python environment containing PyMuPDF:
+
+```sh
+python3 parse_anna_karenina.py Anna_Karenina_Leo_Tolstoy_Z_Library_d5fb2c5f65.pdf
+python3 -m unittest test_parse_anna_karenina.py
+```
+
+The importer preserves the supplied translation, reconstructs prose paragraphs
+from indentation, and removes running headers, folios, footnotes, introductory
+essays, and back matter. The PDF omits six Chapter XXX headings and duplicates
+Part Six's XVIII heading. The missing divisions were checked against the
+[chapter structure in Gutenberg ebook 1399](https://www.gutenberg.org/files/1399/1399-h/1399-h.htm);
+no wording from that translation is used. Source transcription errors may remain.

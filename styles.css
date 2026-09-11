@@ -104,6 +104,21 @@ body {
     display: none;
 }
 
+.book-switcher a { text-decoration: none; align-self: center; }
+#collectionPicker {
+    max-width: min(100%, 320px);
+    min-width: 0;
+    padding: 9px 14px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--bg-color);
+    color: var(--primary-color);
+    font: 600 .75rem var(--font-sans);
+}
+
+#sectionFilterLabel { font-size: .8rem; color: var(--text-light); }
+#sectionFilter { margin: 0 12px 0 6px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-color); font: inherit; }
+
 .book-switch {
     padding: 9px 18px;
     border: 1px solid transparent;

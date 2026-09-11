@@ -35,6 +35,8 @@ let recentPoemIds = [];
 
 // DOM Elements
 const bookSwitcher = document.getElementById('bookSwitcher');
+const sectionFilter = document.getElementById('sectionFilter');
+const sectionFilterLabel = document.getElementById('sectionFilterLabel');
 const bookTitle = document.getElementById('bookTitle');
 const bookSubtitle = document.getElementById('bookSubtitle');
 const bookDescription = document.getElementById('bookDescription');
@@ -179,7 +181,9 @@ async function loadBooks() {
     }
 
     renderBookSwitcher();
-    await selectBook(getStoredBookId() || allBooks[0].id);
+    const requestedBook = new URLSearchParams(location.search).get('book');
+    await selectBook(allBooks.some(book => book.id === requestedBook)
+        ? requestedBook : getStoredBookId() || allBooks[0].id);
 }
 
 function getStoredBookId() {
@@ -193,19 +197,21 @@ function getStoredBookId() {
 
 function renderBookSwitcher() {
     bookSwitcher.replaceChildren();
-    // A single collection needs no switcher.
-    bookSwitcher.hidden = allBooks.length < 2;
-    if (bookSwitcher.hidden) return;
-
+    const libraryLink = document.createElement('a');
+    libraryLink.href = 'library.html';
+    libraryLink.className = 'book-switch';
+    libraryLink.textContent = '← Library';
+    const picker = document.createElement('select');
+    picker.id = 'collectionPicker';
+    picker.setAttribute('aria-label', 'Choose a collection');
     allBooks.forEach(book => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'book-switch';
-        button.dataset.bookId = book.id;
-        button.textContent = book.name;
-        button.addEventListener('click', () => selectBook(book.id));
-        bookSwitcher.appendChild(button);
+        const option = document.createElement('option');
+        option.value = book.id;
+        option.textContent = book.name;
+        picker.appendChild(option);
     });
+    picker.addEventListener('change', () => selectBook(picker.value));
+    bookSwitcher.append(libraryLink, picker);
 }
 
 async function selectBook(bookId) {
@@ -213,6 +219,9 @@ async function selectBook(bookId) {
     if (!book || book === currentBook) return;
 
     currentBook = book;
+    const readerUrl = new URL(location.href);
+    readerUrl.searchParams.set('book', book.id);
+    history.replaceState(null, '', readerUrl);
     try {
         localStorage.setItem(SELECTED_BOOK_STORAGE, book.id);
     } catch {
@@ -240,6 +249,13 @@ async function selectBook(bookId) {
     }
 
     filteredPoems = allPoems;
+    sectionFilter.replaceChildren(new Option('All parts', ''));
+    sectionFilterLabel.hidden = !book.chapterCollection;
+    if (book.chapterCollection) {
+        [...new Set(allPoems.map(poem => poem.section))].forEach(section => {
+            sectionFilter.add(new Option(section, section));
+        });
+    }
     displayPoems(allPoems);
     updateResultCount(allPoems.length, allPoems.length);
     updateExportButton();
@@ -558,11 +574,8 @@ function applyBookIdentity(book) {
     setPasteStatus('');
     bookSourceCredit.hidden = !book.sourceUrl;
     searchInput.placeholder = `Search ${book.name} by title or content…`;
-    bookSwitcher.querySelectorAll('.book-switch').forEach(button => {
-        const selected = button.dataset.bookId === book.id;
-        button.classList.toggle('book-switch--active', selected);
-        button.setAttribute('aria-current', selected ? 'true' : 'false');
-    });
+    randomPoem.textContent = book.chapterCollection ? 'Random chapter' : 'Random from this collection';
+    document.getElementById('collectionPicker').value = book.id;
 }
 
 function getPoemId(poem) {
@@ -660,7 +673,7 @@ function displayPoems(poems) {
         poemsList.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">📖</div>
-                <div class="empty-state-text">No poems found matching your search.</div>
+                <div class="empty-state-text">No ${currentBook?.chapterCollection ? 'chapters' : 'poems'} found matching your search.</div>
             </div>
         `;
         return;
@@ -676,7 +689,7 @@ function displayPoems(poems) {
                 ${poem.author || poem.translator ? `<p class="poem-byline">${escapeHtml([poem.author, poem.translator ? `trans. ${poem.translator}` : ''].filter(Boolean).join(' · '))}</p>` : ''}
                 <p class="poem-preview">${escapeHtml(preview)}</p>
                 <div class="poem-card-footer">
-                    <span class="read-more">Read Full Poem →</span>
+                    <span class="read-more">${currentBook?.chapterCollection ? 'Read Chapter' : 'Read Full Poem'} →</span>
                     ${removable ? `
                         <span class="poem-card-tools">
                             <button class="poem-tool" type="button" aria-label="Edit ${escapeHtml(poem.title)}">Edit</button>
@@ -3179,16 +3192,20 @@ function handleSearch() {
         clearSearch.style.display = 'block';
     }
     
+    if (currentBook?.chapterCollection && sectionFilter.value) {
+        filteredPoems = filteredPoems.filter(poem => poem.section === sectionFilter.value);
+    }
     displayPoems(filteredPoems);
     updateResultCount(filteredPoems.length, allPoems.length);
 }
 
 // Update result count
 function updateResultCount(showing, total) {
+    const entries = currentBook?.chapterCollection ? 'chapters' : 'poems';
     if (showing === total) {
-        resultCount.textContent = `Showing all ${total} poems`;
+        resultCount.textContent = `Showing all ${total} ${entries}`;
     } else {
-        resultCount.textContent = `Showing ${showing} of ${total} poems`;
+        resultCount.textContent = `Showing ${showing} of ${total} ${entries}`;
     }
 }
 
@@ -3218,6 +3235,7 @@ function escapeHtml(text) {
 
 // Event Listeners
 searchInput.addEventListener('input', handleSearch);
+sectionFilter.addEventListener('change', handleSearch);
 clearSearch.addEventListener('click', handleClearSearch);
 randomPoem.addEventListener('click', openRandomPoem);
 globalRandomPoem.addEventListener('click', openGlobalRandomPoem);

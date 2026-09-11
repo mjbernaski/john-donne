@@ -17,7 +17,8 @@
       "sourceProfile": "The Poems of John Donne, edited by Herbert J. C. Grierson (Oxford: Clarendon Press, 1912), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/48688.",
       "readingNotes": "Measured and contemplative, but never flat. Use intelligent rhetorical emphasis, subtle emotional warmth, natural breath at line endings, and slightly longer pauses between stanzas. Preserve Donne's wit, argument, tension, and sensual or devotional energy as the text requires. Use clear modern English pronunciation while respecting archaic words.",
       "readingScene": "A quiet wood-paneled reading room with close, warm acoustics.",
-      "readerProfile": "A seasoned reader of English metaphysical poetry performing John Donne for an attentive, intimate audience."
+      "readerProfile": "A seasoned reader of English metaphysical poetry performing John Donne for an attentive, intimate audience.",
+      "category": "Poetry"
     },
     {
       "id": "whitman",
@@ -36,7 +37,8 @@
       "sourceProfile": "Leaves of Grass, the complete 1891-92 arrangement, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/1322.",
       "readingNotes": "Expansive and unhurried, with the momentum of spoken oratory. Let the long lines run without chopping them, breathe at the commas of a catalogue, and build gradually through an accumulating list. Preserve Whitman's exuberance, tenderness, and direct address to the listener. Use clear modern American pronunciation.",
       "readingScene": "An open room with air and space around the voice, as if addressing a gathered crowd.",
-      "readerProfile": "A seasoned reader of nineteenth-century American poetry performing Walt Whitman for an attentive audience."
+      "readerProfile": "A seasoned reader of nineteenth-century American poetry performing Walt Whitman for an attentive audience.",
+      "category": "Poetry"
     },
     {
       "id": "baudelaire-huneker",
@@ -55,7 +57,8 @@
       "sourceProfile": "The Poems and Prose Poems of Charles Baudelaire, with an introductory preface by James Huneker (New York: Brentano's, 1919), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/36287. The verse is rendered by several translators; the volume also contains the prose poems of Petits Poèmes en Prose.",
       "readingNotes": "Sensuous and controlled, with a dark elegance. Hold the long sentences together, let the imagery land without hurrying past it, and keep irony dry rather than theatrical. Preserve the tension between beauty and disgust that the poems live on. Pronounce French names and titles correctly.",
       "readingScene": "A shuttered nineteenth-century room, close and slightly airless, with warm dampened acoustics.",
-      "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience."
+      "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience.",
+      "category": "Poetry"
     },
     {
       "id": "baudelaire-scott",
@@ -74,7 +77,8 @@
       "sourceProfile": "The Flowers of Evil, translated into English verse by Cyril Scott (London: Elkin Mathews, 1909), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/36098. Scott translates a selection of Les Fleurs du Mal into rhymed English verse throughout.",
       "readingNotes": "Sensuous and controlled, with a dark elegance. Let Scott's rhyme and metre carry without singsong, hold the long sentences together, and keep irony dry rather than theatrical. Preserve the tension between beauty and disgust that the poems live on. Pronounce French names and titles correctly.",
       "readingScene": "A shuttered nineteenth-century room, close and slightly airless, with warm dampened acoustics.",
-      "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience."
+      "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience.",
+      "category": "Poetry"
     },
     {
       "id": "shakespeare",
@@ -93,7 +97,8 @@
       "sourceProfile": "The Complete Works of William Shakespeare, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/100. Each speech is taken from that text exactly as printed, including its archaic spellings and elisions. Line numbering and act or scene divisions follow that edition and may differ from others.",
       "readingNotes": "Perform it as a character thinking aloud, not as a recitation. Let the argument turn and change direction as it does on the page, sustain the verse line without singsong, and let pauses fall where the thought breaks rather than at every line ending. Keep the archaic elisions as written.",
       "readingScene": "A bare stage with a live room around the voice, an audience present but unaddressed.",
-      "readerProfile": "A classically trained actor performing a soliloquy, intimate and unforced, thinking the words rather than declaiming them."
+      "readerProfile": "A classically trained actor performing a soliloquy, intimate and unforced, thinking the words rather than declaiming them.",
+      "category": "Drama"
     },
     {
       "id": "shakespeare-complete",
@@ -112,7 +117,8 @@
       "sourceProfile": "The Complete Works of William Shakespeare, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/100. Plays are divided into front matter and scenes for this interface; sonnets are individual entries and the remaining poems are kept whole. The wording, spelling, and work order follow the source edition.",
       "readingNotes": "Read dramatic scenes as living dialogue, differentiating characters naturally without caricature. Read poems with attention to argument, metre, and shifts of address. Sustain the verse line without singsong, and let pauses follow the thought rather than every line ending. Keep archaic elisions as written.",
       "readingScene": "A spare Elizabethan stage with warm live acoustics and an attentive audience.",
-      "readerProfile": "A classically trained Shakespearean actor reading plays and poems with clarity, intimacy, and dramatic intelligence."
+      "readerProfile": "A classically trained Shakespearean actor reading plays and poems with clarity, intimacy, and dramatic intelligence.",
+      "category": "Drama"
     },
     {
       "id": "shelley",
@@ -131,7 +137,8 @@
       "sourceProfile": "The Complete Poetical Works of Percy Bysshe Shelley, edited by Thomas Hutchinson (Oxford University Press, 1914), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/4800. This collection omits editorial prefaces, bibliographical notices, textual variants, and notes; large works divided into acts or cantos are presented in those reading units. Spelling and punctuation otherwise follow the source text.",
       "readingNotes": "Luminous, rhythmically alive, and intellectually clear. Let the syntax and imagery carry long sentences across line endings without singsong, while preserving the propulsion of rhyme and metre. Give political poems conviction without speechifying, lyrics intimacy without sentimentality, and dramatic passages distinct speakers without caricature. Respect stanza breaks and the text's shifting emotional weather.",
       "readingScene": "An airy, resonant room open to wind and distant natural sounds, with the voice close and clear.",
-      "readerProfile": "A seasoned reader of English Romantic poetry performing Shelley with musical sensitivity, dramatic intelligence, and restrained intensity."
+      "readerProfile": "A seasoned reader of English Romantic poetry performing Shelley with musical sensitivity, dramatic intelligence, and restrained intensity.",
+      "category": "Poetry"
     },
     {
       "id": "dante-italiano",
@@ -150,7 +157,8 @@
       "sourceProfile": "La Divina Commedia di Dante: Inferno, made available by Project Gutenberg at https://www.gutenberg.org/ebooks/997. Each canto is a separate entry here, and the running page header has been removed; spelling, elision, and punctuation otherwise follow the source. This edition runs line for line with the Longfellow translation in this library, canto by canto.",
       "readingNotes": "Read in Italian, with native modern Italian pronunciation of the medieval Tuscan. Let the terza rima be audible without singsong: land the rhyme, but keep the sentence moving across the tercet break where Dante runs it on. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
-      "readerProfile": "A native Italian reader performing Dante's Inferno with the clarity of long familiarity, dramatic but unforced."
+      "readerProfile": "A native Italian reader performing Dante's Inferno with the clarity of long familiarity, dramatic but unforced.",
+      "category": "Poetry"
     },
     {
       "id": "dante-longfellow",
@@ -169,7 +177,8 @@
       "sourceProfile": "Divine Comedy, Longfellow's Translation, Hell, translated by Henry Wadsworth Longfellow (1867), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/1001. Each canto is a separate entry here; Longfellow's own commentary and notes are not part of this text. The translation is line for line with the Italian edition in this library, so a line number in one names the same line in the other.",
       "readingNotes": "Measured and grave, with the weight of the blank verse line. Sustain the unrhymed line without singsong and let pauses follow the thought rather than every line ending. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama. Pronounce the Italian names as Italian.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
-      "readerProfile": "A seasoned reader of Dante in English performing the Inferno for an attentive audience, dramatic but unforced."
+      "readerProfile": "A seasoned reader of Dante in English performing the Inferno for an attentive audience, dramatic but unforced.",
+      "category": "Poetry"
     },
     {
       "id": "dante-cary",
@@ -188,7 +197,8 @@
       "sourceProfile": "The Vision of Hell, translated by Henry Francis Cary (1814), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/8789. Each canto is a separate entry here; Cary's arguments and notes are not part of this text, and the paragraph breaks are the printed edition's rather than Dante's. Because Cary translates freely, his cantos do not run line for line with the Italian.",
       "readingNotes": "Elevated and sonorous, in the register of Milton. Carry the long inverted sentences whole rather than pausing at every line ending, and let the archaic elisions stand as written. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama. Pronounce the Italian names as Italian.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
-      "readerProfile": "A seasoned reader of English Romantic verse performing Cary's Dante for an attentive audience."
+      "readerProfile": "A seasoned reader of English Romantic verse performing Cary's Dante for an attentive audience.",
+      "category": "Poetry"
     },
     {
       "id": "dante-norton",
@@ -207,7 +217,8 @@
       "sourceProfile": "The Divine Comedy of Dante Alighieri, Volume 1, Hell, translated by Charles Eliot Norton (1891), made available by Project Gutenberg at https://www.gutenberg.org/ebooks/1995. Each canto is a separate entry here. Norton's argument summaries and his footnotes, which the printed edition sets between the paragraphs they annotate, have been removed so that the entry holds only the translated text; his paragraph divisions are kept.",
       "readingNotes": "Read it as prose, not as verse pretending to be prose. Follow the sentences and their punctuation, let the clauses run, and do not impose a metrical beat on writing that has none. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama. Pronounce the Italian names as Italian.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
-      "readerProfile": "A seasoned reader performing a prose Dante with clarity and restraint, telling it rather than declaiming it."
+      "readerProfile": "A seasoned reader performing a prose Dante with clarity and restraint, telling it rather than declaiming it.",
+      "category": "Poetry"
     },
     {
       "id": "new-england-mind",
@@ -226,7 +237,29 @@
       "sourceProfile": "The New England Mind: The Seventeenth Century (New York: The Macmillan Company, 1939), digitized by the Digital Library of India and made available at Internet Archive item in.ernet.dli.2015.228756, whose metadata marks the scan public domain. This collection was parsed from machine-generated OCR. Running heads and page numbers were removed and hard-wrapped prose was rejoined; occasional recognition errors may remain. It includes the foreword, sixteen chapters, and two appendices, but omits the index and the standalone endnotes because OCR detached the notes from the passages they annotate.",
       "readingNotes": "Read as lucid scholarly prose: thoughtful, steady, and intellectually engaged. Follow the long argumentative sentences through their clauses without rushing. Shift lightly into quotation when Miller cites Puritan writers, but do not turn historical exposition into theatrical performance. Preserve unfamiliar theological and philosophical terms, and pronounce names carefully.",
       "readingScene": "A quiet university library reading room with close, dry acoustics.",
-      "readerProfile": "A practiced reader of American intellectual history presenting Perry Miller's scholarly prose with clarity and measured authority."
+      "readerProfile": "A practiced reader of American intellectual history presenting Perry Miller's scholarly prose with clarity and measured authority.",
+      "category": "Nonfiction"
+    },
+    {
+      "id": "anna-karenina",
+      "title": "Anna Karenina",
+      "name": "Anna Karenina",
+      "poet": "Leo Tolstoy",
+      "category": "Fiction",
+      "subtitle": "Translated by Richard Pevear and Larissa Volokhonsky",
+      "description": "Leo Tolstoy’s novel, arranged as 239 chapters across eight parts, from your Pevear and Volokhonsky PDF.",
+      "sourceUrl": "https://pwc.res.zabanshenas.ir/Anna_Karenina_Leo_Tolstoy_Z_Library_d5fb2c5f65.pdf",
+      "poems": "poems-anna-karenina.json",
+      "chapterCollection": true,
+      "companionLabel": "Tolstoy companion",
+      "chatContext": "Leo Tolstoy · Anna Karenina · Pevear and Volokhonsky translation",
+      "sourceNote": "Anna Karenina, translated by Richard Pevear and Larissa Volokhonsky (Penguin, 2002). Imported from the PDF supplied by the reader.",
+      "stripEditorialApparatus": false,
+      "authorProfile": "Leo Tolstoy (1828–1910), Russian novelist. This is narrative prose. Discuss characterization, social context, narrative perspective, and the parallel stories of Anna and Levin. The English wording belongs to translators Richard Pevear and Larissa Volokhonsky; distinguish their choices from the Russian original. Avoid spoilers beyond the current chapter unless requested.",
+      "sourceProfile": "User-supplied Pevear and Volokhonsky PDF, Penguin edition (2002), translation copyright 2000. All 239 narrative chapters are retained in eight parts. Running headers, page numbers, footnotes and their small superscript references are removed; introductory essays and back matter are omitted. Six missing Chapter XXX boundaries are restored and a duplicate Part Six Chapter XVIII heading is removed. Paragraphs are reconstructed from indentation. Source transcription errors may remain.",
+      "readingNotes": "Read as narrative prose with natural phrasing, following sentence structure and paragraph breaks. Give dialogue subtle distinctions without exaggerated accents. Preserve Tolstoy’s shifts between intimate thought, conversation, and observation. Pronounce Russian names carefully.",
+      "readingScene": "A quiet reading room with close, warm acoustics.",
+      "readerProfile": "An attentive reader of Russian fiction in English translation, with clarity, warmth, and restraint."
     },
     {
       "id": "miscellaneous",
@@ -245,7 +278,9 @@
       "sourceProfile": "Pasted by the reader and stored in their browser. There is no scholarly edition or editorial apparatus behind this text, so treat spelling, punctuation, and lineation as given, and do not attribute variants to an editor.",
       "readingNotes": "Read attentively and let the poem set the register rather than imposing one. Follow the punctuation and lineation as given, breathe at line endings, and pause a little longer between stanzas.",
       "readingScene": "A quiet room with close, warm acoustics.",
-      "readerProfile": "A seasoned reader of poetry performing an unfamiliar poem carefully and without mannerism."
+      "readerProfile": "A seasoned reader of poetry performing an unfamiliar poem carefully and without mannerism.",
+      "category": "Personal"
     }
-  ]
+  ],
+  "externalBooks": []
 }
