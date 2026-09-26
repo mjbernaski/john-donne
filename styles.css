@@ -72,6 +72,13 @@ body {
 }
 
 /* Header */
+.build-number {
+    margin-top: 10px;
+    color: var(--text-light);
+    font: 600 0.62rem/1 var(--font-sans);
+    letter-spacing: 0.06em;
+}
+
 .header {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
     color: white;
@@ -1628,6 +1635,17 @@ body {
     font-size: 0.65rem;
 }
 
+.poem-image-prompt {
+    margin: 0;
+    padding: 12px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-color);
+    font: 0.8rem/1.6 var(--font-sans);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
 .poem-audio {
     margin-bottom: 30px;
     padding: 16px 18px;
@@ -1637,10 +1655,10 @@ body {
 }
 
 .poem-audio-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
+    display: grid;
+    grid-template-columns: minmax(150px, 0.55fr) minmax(420px, 1.45fr);
+    align-items: start;
+    gap: 18px 28px;
 }
 
 .poem-audio-eyebrow {
@@ -1661,16 +1679,52 @@ body {
 }
 
 .poem-audio-actions {
-    display: flex;
-    align-items: center;
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+}
+
+.poem-audio-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
     gap: 8px;
 }
 
-.poem-audio-actions label {
+.poem-audio-field {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+}
+
+.poem-audio-field span {
     color: var(--text-light);
     font-family: var(--font-sans);
     font-size: 0.68rem;
     font-weight: 700;
+}
+
+.poem-audio-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.poem-audio-actions > .generate-collection-audio {
+    justify-self: end;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-light);
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.poem-audio-actions > .generate-collection-audio:hover:not(:disabled) {
+    color: var(--secondary-color);
 }
 
 .poem-audio-actions select,
@@ -1682,6 +1736,11 @@ body {
     color: var(--text-color);
     font-family: var(--font-sans);
     font-size: 0.72rem;
+}
+
+.poem-audio-actions select {
+    width: 100%;
+    min-width: 0;
 }
 
 .poem-audio-actions button {
@@ -1731,6 +1790,14 @@ body {
     color: var(--primary-color);
     text-decoration: underline;
     text-underline-offset: 3px;
+}
+
+.media-delete {
+    color: #8b2f29;
+}
+
+.media-delete:hover {
+    color: #641f1a;
 }
 
 .media-download:focus-visible {
@@ -1784,6 +1851,38 @@ body {
     grid-template-columns: 2.25rem minmax(0, 1fr);
     column-gap: 0.9rem;
     align-items: baseline;
+}
+
+.narration-part-marker {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 1.45rem 0 0.55rem;
+    color: color-mix(in srgb, var(--text-light) 72%, transparent);
+    font: 600 0.58rem/1 var(--font-sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.narration-part-marker::before,
+.narration-part-marker::after {
+    content: '';
+    height: 1px;
+    background: color-mix(in srgb, var(--border-color) 65%, transparent);
+}
+
+.narration-part-marker::before {
+    width: 2.25rem;
+}
+
+.narration-part-marker::after {
+    flex: 1;
+}
+
+.narration-part-marker b {
+    color: color-mix(in srgb, var(--secondary-color) 68%, var(--text-light));
+    font-weight: 700;
 }
 
 .modal-poem-content.is-following-reading .poem-line.is-reading-current::before {
@@ -2746,18 +2845,29 @@ body {
         font-size: 0.65rem;
     }
 
-    .poem-audio-heading,
-    .poem-audio-actions {
-        align-items: stretch;
-        flex-direction: column;
+    .poem-audio-heading {
+        grid-template-columns: 1fr;
+        gap: 12px;
     }
 
     .poem-audio-actions {
         margin-top: 6px;
     }
 
-    .poem-audio-actions label {
-        display: none;
+    .poem-audio-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .poem-audio-buttons {
+        align-items: stretch;
+        justify-content: stretch;
+        flex-direction: column;
+    }
+
+    .poem-audio-buttons button,
+    .poem-audio-buttons .media-download {
+        width: 100%;
+        text-align: center;
     }
 
     .chat-hint {

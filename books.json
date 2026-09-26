@@ -158,7 +158,8 @@
       "readingNotes": "Read in Italian, with native modern Italian pronunciation of the medieval Tuscan. Let the terza rima be audible without singsong: land the rhyme, but keep the sentence moving across the tercet break where Dante runs it on. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A native Italian reader performing Dante's Inferno with the clarity of long familiarity, dramatic but unforced.",
-      "category": "Poetry"
+      "category": "Poetry",
+      "narrativeIllustrations": true
     },
     {
       "id": "dante-longfellow",
@@ -178,7 +179,8 @@
       "readingNotes": "Measured and grave, with the weight of the blank verse line. Sustain the unrhymed line without singsong and let pauses follow the thought rather than every line ending. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama. Pronounce the Italian names as Italian.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A seasoned reader of Dante in English performing the Inferno for an attentive audience, dramatic but unforced.",
-      "category": "Poetry"
+      "category": "Poetry",
+      "narrativeIllustrations": true
     },
     {
       "id": "dante-cary",
@@ -198,7 +200,8 @@
       "readingNotes": "Elevated and sonorous, in the register of Milton. Carry the long inverted sentences whole rather than pausing at every line ending, and let the archaic elisions stand as written. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama. Pronounce the Italian names as Italian.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A seasoned reader of English Romantic verse performing Cary's Dante for an attentive audience.",
-      "category": "Poetry"
+      "category": "Poetry",
+      "narrativeIllustrations": true
     },
     {
       "id": "dante-norton",
@@ -218,7 +221,8 @@
       "readingNotes": "Read it as prose, not as verse pretending to be prose. Follow the sentences and their punctuation, let the clauses run, and do not impose a metrical beat on writing that has none. Give the speeches of the damned their own voice and register, and let the pilgrim's fear, pity, and horror register without melodrama. Pronounce the Italian names as Italian.",
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A seasoned reader performing a prose Dante with clarity and restraint, telling it rather than declaiming it.",
-      "category": "Poetry"
+      "category": "Poetry",
+      "narrativeIllustrations": true
     },
     {
       "id": "new-england-mind",
@@ -280,6 +284,33 @@
       "readingScene": "A quiet room with close, warm acoustics.",
       "readerProfile": "A seasoned reader of poetry performing an unfamiliar poem carefully and without mannerism.",
       "category": "Personal"
+    },
+    {
+      "id": "sherlock-holmes",
+      "name": "Sherlock Holmes",
+      "title": "The Complete Sherlock Holmes",
+      "poet": "Arthur Conan Doyle",
+      "category": "Fiction",
+      "subtitle": "Four novels and fifty-six short stories",
+      "description": "Arthur Conan Doyle’s complete Sherlock Holmes canon, arranged as 56 short stories and 56 novel chapters across nine books.",
+      "poems": "poems-sherlock-holmes.json",
+      "chapterCollection": true,
+      "entryLabel": "stories and chapters",
+      "workType": "story or chapter",
+      "readLabel": "Read Story or Chapter",
+      "randomLabel": "Random story or chapter",
+      "sectionLabel": "Book",
+      "allSectionsLabel": "All books",
+      "companionLabel": "Holmes companion",
+      "chatContext": "Arthur Conan Doyle · The Complete Sherlock Holmes · sherlock-holm.es",
+      "sourceUrl": "https://sherlock-holm.es/stories/pdf/a4/2-sided-reversed/",
+      "sourceNote": "The Complete Sherlock Holmes, Arthur Conan Doyle. Text from the sherlock-holm.es HTML edition (version 3.1); source link opens the A4 reversed two-sided PDFs.",
+      "stripEditorialApparatus": false,
+      "authorProfile": "Arthur Conan Doyle (1859–1930), creator of Sherlock Holmes and Dr. Watson. Discuss deduction, evidence, characterization, narrative perspective, and the social setting of these detective stories. Avoid revealing solutions or events beyond the selected story or chapter unless asked.",
+      "sourceProfile": "The complete canon from https://sherlock-holm.es/stories/html/cano.html, the HTML counterpart to the supplied PDF collection. Contains four novels split into 56 chapters and all 56 short stories, grouped into nine books without omnibus duplicates. Contents tables, collection prefaces, novel part epigraphs, and publication boilerplate are omitted. Illustrated clues are represented by the source’s alternative text; consult the original for diagrams and cipher figures.",
+      "readingNotes": "Read as narrative prose with clear, measured phrasing and natural paragraph pauses. Give Watson a warm, observant voice and Holmes precise, restrained dialogue. Build suspense without exaggeration, and pronounce Victorian names and places carefully.",
+      "readingScene": "A quiet Victorian study with a fire and close, warm acoustics.",
+      "readerProfile": "An attentive reader of British detective fiction, conveying wit, curiosity, and suspense with restraint."
     }
   ],
   "externalBooks": []

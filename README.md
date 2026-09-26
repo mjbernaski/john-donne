@@ -22,7 +22,7 @@ collections from the same interface.
 - **Visual Companions**: Generate a length-scaled set of FLUX illustrations for each poem
 - **Chosen Visual Styles**: Pick which of the 24 image styles the illustrations may use, or leave the choice open
 - **Image Steering**: Add a line of your own direction that every image prompt must follow
-- **Gemini Narration**: Hear poems and model responses performed with distinct voices
+- **Selectable Narration**: Choose fast local Chatterbox narration or expressive Gemini performances
 - **Read Replies Aloud**: Have each companion answer narrated as it arrives
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 
@@ -71,6 +71,7 @@ builds a switcher in the header from it. The configured collections are listed b
 | Shakespeare · Complete | `poems-shakespeare-complete.json` | Gutenberg ebook 100 — complete corpus arranged by sonnet, scene, and long poem |
 | The Complete Poetical Works of Percy Bysshe Shelley | `poems-shelley.json` | Hutchinson Oxford edition, 1914 — Gutenberg ebook 4800 — 312 entries |
 | The New England Mind: The Seventeenth Century | `poems-new-england-mind.json` | Macmillan first edition, 1939 — Internet Archive DLI scan — 19 entries |
+| The Complete Sherlock Holmes | `poems-sherlock-holmes.json` | sherlock-holm.es — 56 short stories and 56 novel chapters across nine books |
 | Miscellaneous | none — browser storage | The reader, not a Gutenberg ebook — poems pasted in by hand |
 
 Choosing a collection swaps the poems, the page's titles and description, the
@@ -166,7 +167,7 @@ Each entry in `books.json` carries that collection's display strings — `title`
 | Field | Used for |
 | --- | --- |
 | `poet`, `authorProfile`, `sourceProfile` | The chat companion's briefing and the image prompts |
-| `readerProfile`, `readingScene`, `readingNotes` | The Gemini narration voice and its performance direction |
+| `readerProfile`, `readingScene`, `readingNotes` | The local narration voice and its performance direction |
 
 Adding a collection is a matter of adding a JSON entry and a poems file. No
 front-end code changes. The Miscellaneous entry is the one exception to the
@@ -204,6 +205,25 @@ network interface. On this machine it is installed as the macOS launch agent
 if it exits. Its output is written to `~/Library/Logs/poetry-server.log` and
 `~/Library/Logs/poetry-server.error.log`.
 
+On this Mac, the agent runs through a locally signed **Poetry Server.app** so
+macOS can identify it when asking for Local Network access. An unsigned
+Homebrew Python can otherwise fail with `No route to host` without appearing
+in the permission list. Build and register the app before installing the agent:
+
+```bash
+python3 launchd/build_poetry_app.py
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$PWD/launchd/Poetry Server.app"
+cp launchd/com.johndonne.poetry-server.plist ~/Library/LaunchAgents/
+```
+
+Reload an already loaded agent with `launchctl bootout
+gui/$(id -u)/com.johndonne.poetry-server`, then use the bootstrap command below.
+Open Discuss and choose **Allow** on the **Poetry Server** Local Network prompt.
+The same permission can be enabled under System Settings → Privacy & Security
+→ Local Network. Rebuild and register the app after upgrading Homebrew Python
+3.10, then reload the agent; macOS may request permission again. The generated
+app is ignored by Git and leaves the installed Python executable unchanged.
+
 Useful service commands:
 
 ```bash
@@ -225,7 +245,7 @@ Four things are host-specific and need attention on a move:
 | Item | What to do |
 | --- | --- |
 | Service definition | `launchd/com.johndonne.poetry-server.plist` is macOS-only. On a Linux host use `deploy/poetry-server.service` instead, editing `User`, `WorkingDirectory`, and the `server.py` path. |
-| Python interpreter | The plist hardcodes `/usr/local/bin/python3`. The systemd unit assumes `/usr/bin/python3`. Only the standard library is used, so any Python 3.9+ works. |
+| Python interpreter | The macOS plist uses `launchd/Poetry Server.app`, built from Homebrew Python 3.10 by `launchd/build_poetry_app.py`; adjust that script's source path on another Mac. The systemd unit assumes `/usr/bin/python3`. Only the standard library is used. |
 | `.env` | Holds `FLUX_API_KEY` and optionally `GEMINI_API_KEY`. It is gitignored, so copy it across by hand — cloning the repo will not bring it. |
 | Reachability | The new host must be able to reach the FLUX and vLLM machines in `config.json`. Confirm with `curl` from the host before starting the service. |
 
@@ -242,14 +262,21 @@ address and port:
   "server": { "host": "0.0.0.0", "port": 8888 },
   "upstreams": {
     "flux": "http://192.168.6.40:2222",
-    "vllm": "http://192.168.5.40:8899"
+    "vllm": "http://192.168.5.40:8899",
+    "vllm_fallback": "http://192.168.6.40:8080"
   }
 }
 ```
 
 Change an address there and restart the service; nothing else needs editing.
-The environment variables `FLUX_BASE_URL` and `VLLM_BASE_URL` override the file,
+The environment variables `FLUX_BASE_URL`, `VLLM_BASE_URL`, and `VLLM_FALLBACK_URL` override the file,
 and `--host`/`--port` override the `server` block.
+
+Discuss tries the primary model server first, then the fallback on connection
+failures, timeouts, rate limits, or server errors before streaming starts. Model
+discovery has a five-second timeout. Completion requests resolve the selected
+server's model ID so saved conversations can move between servers. Set the
+fallback to an empty string to disable it. An interrupted stream is not retried.
 
 The browser only ever talks to this server's own origin. Both upstreams are
 reached through allow-listed reverse proxies, so a reader's device never needs
@@ -364,19 +391,46 @@ departs from the subject, so it can override the scene description the model
 wrote rather than merely adding to it. Like the style selection it is kept in
 browser storage, so it holds across reloads until it is cleared.
 
-Poem narration uses `gemini-3.1-flash-tts-preview`. Set the Gemini key on the
-local server (recommended), or enter it once in the narration panel:
+Narration can use either the Chatterbox Turbo service configured by
+`upstreams.tts` in `config.json` (currently `http://192.168.5.46:7862`) or
+Gemini 3.8 Flash-Lite TTS, 3.8 Flash TTS, 3.1 Flash TTS, or 2.5 Flash Preview TTS. Local Chatterbox is the default and requires no cloud
+API key. The Gemini voice selector offers all 30 studio voices and remembers the
+selected reading voice in this browser. **Preview selected voice** reads the same
+short passage for each voice, shows an estimated cost, and reuses saved previews
+for the same model and voice. Previews are generated only when requested.
+Gemini restores the earlier Gacrux (mature) and Algieba (smooth)
+reading voices, with Iapetus (clear) for narrated companion replies. Set
+`GEMINI_API_KEY` on the server or enter it in the narration panel when Gemini is
+selected.
 
-```bash
-GEMINI_API_KEY=gemini-key FLUX_API_KEY=flux-key python3 server.py
-```
+When Gemini is selected, the narration status shows an estimated paid-tier cost
+before generation. The estimate follows the selected model's September 2026
+standard paid-tier rate; audio is metered at 25 tokens per second. Cached
+readings are reused without another generation charge.
 
 Long works are divided in the browser into separately playable parts of roughly
-1,800 characters. Each part is generated and cached independently, so a failed
-request does not discard an entire chapter and a reader can resume later. Short
-poems remain a single recording. The feminine option uses the mature Gacrux voice; the
-masculine option uses the smooth Algieba voice. Each completed model response
-also has its own listen control using the distinct, clear Iapetus voice. The
+300 characters for local TTS or 1,800 for Gemini. Chunking prefers paragraph
+breaks, then sentence endings, then line or word breaks when a sentence exceeds
+the limit. Short parts keep their natural boundaries. Each part is generated and cached independently, so a failed
+request does not discard an entire chapter and a reader can resume later. A
+range action submits the remaining parts to a server-owned queue. Chapter and
+collection generation continues when the tab is suspended, the reader navigates,
+or the page closes. Parts run sequentially and are saved to disk as they finish;
+repeating the same active request reconnects to its queue, and retries reuse
+saved parts without another generation charge. Gemini 3.1/2.5 requests retry
+temporary connection failures, rate limits, server errors, and incomplete audio
+up to four attempts with backoff. Progress shows the active part, attempt,
+elapsed time, and retry countdown. Permanent errors stop immediately; exhausted
+retries identify the failed part and explain how to resume. Browser progress
+requests time out after 15 seconds and reconnect up to four times to the same
+queue, so a brief network interruption does not abandon progress tracking.
+The server must remain running: after a server restart, submit the range
+again to resume from saved recordings. Cached chapters
+can play continuously from any selected part to the end. Once every
+part exists, the app can also join them losslessly into one saved chapter WAV
+for ordinary playback or download. Short
+poems remain a single recording. Each completed model response also has its own
+listen control using the selected provider's companion voice. The
 WAV performances are stored in IndexedDB and automatically reused for the same
 poem, voice, or saved model response on later visits. The narration panel checks
 both poem voices when it opens and marks every available performance in the
@@ -533,3 +587,27 @@ essays, and back matter. The PDF omits six Chapter XXX headings and duplicates
 Part Six's XVIII heading. The missing divisions were checked against the
 [chapter structure in Gutenberg ebook 1399](https://www.gutenberg.org/files/1399/1399-h/1399-h.htm);
 no wording from that translation is used. Source transcription errors may remain.
+
+### Sherlock Holmes
+
+The complete canon is available under **Sherlock Holmes** in the collection picker.
+The book filter groups all 56 short stories and 56 novel chapters into the four
+novels and five story collections. The source credit links to the supplied
+[A4 reversed two-sided PDF directory](https://sherlock-holm.es/stories/pdf/a4/2-sided-reversed/).
+Reading text comes from the same site's HTML edition, avoiding reversed PDF page
+order and duplicate omnibus editions. Paragraphs and embedded letters are retained;
+illustrated clues use the source's alternative descriptions. Consult the original
+for diagrams and cipher figures. Collection prefaces, novel part epigraphs,
+contents tables, and publication boilerplate are omitted.
+
+Rebuild with the Python standard library:
+
+```sh
+python3 parse_sherlock_holmes.py
+# Or use an already downloaded copy of the HTML edition:
+python3 parse_sherlock_holmes.py /path/to/cano.html
+```
+
+The importer validates the full 60-work canon and per-book entry counts before
+writing the output. Run `python3 -m unittest test_parse_sherlock_holmes.py` for
+collection integrity checks.

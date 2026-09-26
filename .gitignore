@@ -1,4 +1,5 @@
 __pycache__/
+launchd/Poetry Server.app/
 *.py[cod]
 .env
 *.log

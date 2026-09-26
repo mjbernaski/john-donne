@@ -151,33 +151,76 @@
                             <section class="poem-audio" aria-labelledby="poemAudioTitle">
                                 <div class="poem-audio-heading">
                                     <div>
-                                        <p class="poem-audio-eyebrow">Gemini narration</p>
+                                        <p id="poemAudioEyebrow" class="poem-audio-eyebrow">Local Chatterbox narration</p>
                                         <h3 id="poemAudioTitle" class="poem-audio-title">Hear the poem aloud</h3>
                                     </div>
                                     <div class="poem-audio-actions">
-                                        <label for="poemVoice">Voice</label>
-                                        <select id="poemVoice">
-                                            <option value="feminine">Feminine · mature</option>
-                                            <option value="masculine">Masculine · smooth</option>
-                                        </select>
-                                        <label id="poemAudioPartLabel" for="poemAudioPart" hidden>Part</label>
-                                        <select id="poemAudioPart" hidden></select>
-                                        <button id="generateAudio" type="button">Read poem</button>
-                                        <button id="playSavedAudio" class="play-saved-audio" type="button" hidden>Play saved reading</button>
-                                        <button id="followReading" class="follow-reading-toggle" type="button" aria-pressed="false">Follow text</button>
-                                        <a id="downloadAudio" class="media-download" download hidden>Download</a>
+                                        <div class="poem-audio-fields">
+                                            <label class="poem-audio-field" for="ttsProvider">
+                                                <span>Narrator</span>
+                                                <select id="ttsProvider">
+                                                    <option value="local">Local · Spark/Qwen</option>
+                                                    <option value="gemini">Gemini · expressive</option>
+                                                </select>
+                                            </label>
+                                            <label class="poem-audio-field" for="poemVoice">
+                                                <span>Voice</span>
+                                                <select id="poemVoice">
+                                                    <option value="feminine">Local voice 1</option>
+                                                    <option value="masculine">Local voice 2</option>
+                                                </select>
+                                            </label>
+                                            <label id="geminiModelField" class="poem-audio-field" for="geminiTtsModel" hidden>
+                                                <span>Gemini model</span>
+                                                <select id="geminiTtsModel">
+                                                    <option value="gemini-3.8-flash-lite-tts">3.8 Flash-Lite TTS · lowest cost</option>
+                                                    <option value="gemini-3.8-flash-tts">3.8 Flash TTS · expressive</option>
+                                                    <option value="gemini-3.1-flash-tts-preview">3.1 Flash TTS</option>
+                                                    <option value="gemini-2.5-flash-preview-tts">2.5 Flash TTS</option>
+                                                </select>
+                                            </label>
+                                            <label id="poemAudioPartLabel" class="poem-audio-field" for="poemAudioPart" hidden>
+                                                <span>Part</span>
+                                                <select id="poemAudioPart"></select>
+                                            </label>
+                                        </div>
+                                        <div class="poem-audio-buttons">
+                                            <button id="previewGeminiVoice" class="play-saved-audio" type="button" hidden>Preview selected voice</button>
+                                            <button id="playSavedAudio" class="play-saved-audio" type="button" hidden>Play selected part</button>
+                                            <button id="playAllAudio" class="play-saved-audio" type="button" hidden>Play from selected part</button>
+                                            <button id="generateAudio" type="button">Generate selected part</button>
+                                            <button id="generateAllAudio" type="button" hidden>Generate missing parts</button>
+                                            <button id="stitchChapterAudio" class="play-saved-audio" type="button" hidden>Make one chapter file</button>
+                                            <button id="playCompleteChapter" class="play-saved-audio" type="button" hidden>Play complete chapter</button>
+                                            <a id="downloadCompleteChapter" class="media-download" download hidden>Download complete chapter</a>
+                                            <button id="followReading" class="follow-reading-toggle" type="button" aria-pressed="false">Follow text</button>
+                                            <a id="downloadAudio" class="media-download" download hidden>Download</a>
+                                        </div>
+                                        <button id="generateCollectionAudio" class="generate-collection-audio" type="button">Generate missing audio for this collection</button>
+                                        <div id="geminiVoicePreview" hidden>
+                                            <p id="geminiVoicePreviewStatus" role="status"></p>
+                                            <audio id="geminiVoicePreviewPlayer" controls preload="none" hidden aria-label="Selected voice preview"></audio>
+                                        </div>
                                     </div>
                                 </div>
                                 <div id="geminiKeySetup" class="image-key-setup" hidden>
                                     <label for="geminiApiKey">Gemini API key</label>
                                     <div class="image-key-row">
-                                        <input id="geminiApiKey" type="password" autocomplete="off" placeholder="Required for Gemini TTS">
+                                        <input id="geminiApiKey" type="password" autocomplete="off" placeholder="Required for Gemini narration">
                                         <button id="saveGeminiApiKey" type="button">Save key</button>
                                     </div>
-                                    <p>The key stays in this browser and is sent only through the local poetry server.</p>
+                                    <p>The key stays in this browser and is relayed only through the poetry server.</p>
                                 </div>
                                 <p id="poemAudioStatus" class="poem-audio-status">Choose a voice, then generate a reading.</p>
                                 <audio id="poemAudioPlayer" controls preload="none" hidden></audio>
+                                <div id="chapterRecordingPanel" hidden>
+                                    <h3>Chapter recording</h3>
+                                    <p id="chapterRecordingStatus" class="poem-audio-status" role="status"></p>
+                                    <label for="chapterRecordingPart">Saved audio</label>
+                                    <select id="chapterRecordingPart"></select>
+                                    <audio id="chapterRecordingPlayer" controls preload="none" aria-label="Saved chapter recording"></audio>
+                                    <a id="chapterRecordingDownload" class="media-download" download hidden>Download complete chapter</a>
+                                </div>
                             </section>
                             <div id="modalContent" class="modal-poem-content"></div>
                         </div>
@@ -265,6 +308,7 @@
             <p id="bookSourceNote" class="footer-note">
                 The Poems of John Donne, Edited by Herbert J. C. Grierson (1912)
             </p>
+            <p class="build-number" aria-label="Application build 2026.09.02.54">Build 2026.09.02.54</p>
         </footer>
     </div>
 
@@ -273,6 +317,7 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260911-discuss-prompt"></script>
+    <script src="app.js?v=20260911-discuss-evidence"></script>
+    <script src="chapter-recordings.js?v=20260923"></script>
 </body>
 </html>

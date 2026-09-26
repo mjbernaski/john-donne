@@ -5,10 +5,16 @@
     <key>Label</key>
     <string>com.johndonne.poetry-server</string>
 
-    <!-- python3 is executed directly rather than through a login shell. The
-         checkout lives on an external volume, and macOS gates that volume
-         behind Full Disk Access; naming the interpreter here means the grant
-         is scoped to python3 instead of to /bin/zsh. A path containing a space
+    <!-- Build and register this app with build_poetry_app.py before loading
+         the agent so macOS can present its Local Network permission prompt. -->
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>com.johndonne.poetry-server</string>
+    </array>
+
+    <!-- Python is executed from the locally signed Poetry Server app. The
+         checkout lives on an external volume, so this exact app
+         needs access under macOS Privacy & Security. A path containing a space
          needs no quoting because each argument is its own array element.
          server.py chdirs to its own directory at startup, which is why no
          WorkingDirectory is needed; it reads the bind address and port from
@@ -16,7 +22,7 @@
          --port, or shell-sourced environment is passed. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/python3</string>
+        <string>/Volumes/Disk B/john-donne/launchd/Poetry Server.app/Contents/MacOS/PoetryServer</string>
         <string>-u</string>
         <string>/Volumes/Disk B/john-donne/server.py</string>
     </array>

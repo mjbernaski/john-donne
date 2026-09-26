@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.johndonne.perry-tts</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/python3.10</string>
+        <string>-u</string>
+        <string>/Volumes/Disk B/john-donne/batch_generate_perry_tts.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/michaelbernaski/Library/Logs/perry-tts.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/michaelbernaski/Library/Logs/perry-tts.error.log</string>
+</dict>
+</plist>
