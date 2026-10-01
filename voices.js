@@ -109,7 +109,11 @@ function voiceCard(voice) {
         assign.value = '';
     });
 
-    actions.append(play, assign);
+    const stream = document.createElement('button');
+    stream.type = 'button';
+    stream.textContent = 'Stream';
+    stream.addEventListener('click', () => streamSample(voice, note));
+    actions.append(play, stream, assign);
     card.append(heading, note, actions);
     return card;
 }
@@ -200,3 +204,12 @@ async function prepareAll() {
 prepareButton.addEventListener('click', prepareAll);
 refreshButton.addEventListener('click', loadVoices);
 loadVoices();
+
+function streamSample(voice, note) {
+    player.pause();
+    return LocalSpeech.play(catalog.sampleText, voice.name, note);
+}
+const stopStream = document.createElement('button');
+stopStream.type = 'button'; stopStream.textContent = 'Stop stream';
+refreshButton.after(stopStream);
+stopStream.addEventListener('click', () => LocalSpeech.stop());

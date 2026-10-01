@@ -102,7 +102,7 @@ async function run() {
         let planned = 0;
         Object.assign(context, {
             currentBook: book, currentPoem: chapter, currentChatSession: session,
-            generateImages: { disabled: false }, console: { warn() {} },
+            generateImages: { disabled: false }, stopImages: { hidden: true, disabled: false }, console: { warn() {} },
             getFluxStatus: async () => ({}), getPoemImageCount: () => 3,
             getSelectedStyles: () => [{ label: 'Oil painting', prompt: 'Oil painting.' }],
             getSteerText: () => '', setPoemImagesStatus: () => {},
@@ -129,7 +129,7 @@ async function run() {
     await checkPartialPlan(1, true);
     await checkPartialPlan(3);
 
-    vm.runInContext(code.slice(code.indexOf('async function pollPoemImageJobs('), code.indexOf('async function reconcilePoemImageJobs(')), context);
+    vm.runInContext(code.slice(code.indexOf('function completeImageJob('), code.indexOf('async function reconcilePoemImageJobs(')), context);
     for (const stillPlanning of [true, false]) {
         const session = { images: [{ jobId: 'job-1', status: 'queued' }], imagePlanningActive: stillPlanning };
         Object.assign(context, {

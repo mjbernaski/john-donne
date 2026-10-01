@@ -1,5 +1,7 @@
 // Poetry Website Application
 let allPoems = [];
+const collectionTexts = new Map();
+let bookSelectionVersion = 0;
 let filteredPoems = [];
 const poemChatSessions = new WeakMap();
 const CHAT_PROXY_URL = '/api/chat';
@@ -10,7 +12,7 @@ const SELECTED_BOOK_STORAGE = 'john-donne-selected-book';
 const IMAGE_STYLES_STORAGE = 'john-donne-image-styles';
 const IMAGE_STEER_STORAGE = 'john-donne-image-steer';
 const USER_POEMS_STORAGE = 'john-donne-user-poems';
-const VOICE_NAMES = { feminine: 'Local voice 1', masculine: 'Local voice 2', companion: 'Local voice 3' };
+const VOICE_NAMES = { feminine: 'Vivian', masculine: 'Ryan', companion: 'Aiden' };
 const GEMINI_VOICE_NAMES = { feminine: 'Gacrux', masculine: 'Algieba', companion: 'Iapetus' };
 const GEMINI_STUDIO_VOICES = {
     Gacrux: 'Mature', Algieba: 'Smooth', Iapetus: 'Clear',
@@ -27,13 +29,9 @@ const GEMINI_VOICE_SAMPLE = 'No man is an island, entire of itself; every man is
 const TTS_PROVIDER_STORAGE = 'john-donne-tts-provider';
 const GEMINI_TTS_MODEL_STORAGE = 'john-donne-gemini-tts-model';
 const POEM_VOICES = ['feminine', 'masculine'];
-// Qwen's /generate endpoint accepts at most 1,000 characters. Leave room for
-// the title that the server prepends to the first chunk.
-// The local model's audio response is capped at 28.8 seconds. Keep each request
-// short enough to finish at a measured prose pace instead of accepting a
-// successful-looking WAV that stops midway through its transcript.
-const NARRATION_PART_LIMIT = 300;
-const GEMINI_NARRATION_PART_LIMIT = 1800;
+// Keep local narration parts short for responsive playback and shared LAN use.
+const NARRATION_PART_LIMIT = 5000;
+const GEMINI_NARRATION_PART_LIMIT = 5000;
 const GEMINI_TTS_PIPELINE_VERSION = 2;
 let selectedStyleLabels = new Set();
 let editingPoem = null;
@@ -115,6 +113,7 @@ const chatHistoryList = document.getElementById('chatHistoryList');
 const chatBrief = document.getElementById('chatBrief');
 const chatReadReplies = document.getElementById('chatReadReplies');
 const generateImages = document.getElementById('generateImages');
+const stopImages = document.getElementById('stopImages');
 const imageKeySetup = document.getElementById('imageKeySetup');
 const imageApiKey = document.getElementById('imageApiKey');
 const saveImageApiKey = document.getElementById('saveImageApiKey');
@@ -137,7 +136,6 @@ const stitchChapterAudio = document.getElementById('stitchChapterAudio');
 const playCompleteChapter = document.getElementById('playCompleteChapter');
 const downloadCompleteChapter = document.getElementById('downloadCompleteChapter');
 const chapterVCompleteUrl = '/audio-library/' + encodeURIComponent('Perry Miller - Chapter V - Complete chapter - Gemini with local fallback.wav');
-const generateCollectionAudio = document.getElementById('generateCollectionAudio');
 const playAllAudio = document.getElementById('playAllAudio');
 const playSavedAudio = document.getElementById('playSavedAudio');
 const followReading = document.getElementById('followReading');
@@ -153,7 +151,6 @@ let activeTimedAudio = null;
 let audioRemainingFrame = null;
 let readingFollowFrame = null;
 let wholeChapterPlayback = null;
-let collectionAudioBatchRunning = false;
 let imageLibraryItems = [];
 const imageLibraryObjectUrls = new Set();
 
@@ -189,7 +186,9 @@ function updateTtsProviderUi() {
     const provider = selectedTtsProvider();
     populateNarrationVoices(provider);
     updateGeminiVoicePreview();
-    poemAudioEyebrow.textContent = provider === 'gemini' ? 'Gemini expressive narration' : 'Local Chatterbox narration';
+    poemAudioEyebrow.textContent = provider === 'gemini' ? 'Gemini expressive narration' : 'Local Qwen3 narration';
+    document.getElementById('refreshLocalVoices').hidden = provider !== 'local';
+    document.getElementById('localVoiceCatalogStatus').hidden = provider !== 'local';
     geminiModelField.hidden = provider !== 'gemini';
     geminiKeySetup.hidden = provider !== 'gemini' || Boolean(getGeminiApiKey());
     if (currentPoem && currentChatSession) updatePoemVoiceOptions(currentChatSession);
@@ -204,8 +203,16 @@ function updateTtsProviderUi() {
     }
 }
 
-function populateNarrationVoices(provider) {
-    if (poemVoice.dataset.provider === provider) return;
+const LOCAL_VOICE_STORAGE = 'john-donne-local-reading-voice';
+let localNarrationVoices = ['serena', 'vivian', 'uncle_fu', 'ryan', 'aiden', 'ono_anna', 'sohee', 'eric', 'dylan'];
+let localNarrationRoles = { feminine: 'vivian', masculine: 'ryan', companion: 'aiden' };
+let localVoicesLoading = null;
+
+function populateNarrationVoices(provider, force = false) {
+    if (!force && poemVoice.dataset.provider === provider) {
+        if (provider === 'local') refreshLocalNarrationVoices();
+        return;
+    }
     const previous = poemVoice.value;
     let selected = previous;
     if (provider === 'gemini') {
@@ -215,10 +222,51 @@ function populateNarrationVoices(provider) {
             return new Option(`${name} · ${GEMINI_STUDIO_VOICES[name]}`, role || name);
         }));
     } else {
-        poemVoice.replaceChildren(new Option(VOICE_NAMES.feminine, 'feminine'), new Option(VOICE_NAMES.masculine, 'masculine'));
+        if (poemVoice.dataset.provider !== provider) {
+            try { selected = localStorage.getItem(LOCAL_VOICE_STORAGE) || 'feminine'; } catch { selected = 'feminine'; }
+        }
+        poemVoice.replaceChildren(...localNarrationVoices.map(name => {
+            const role = Object.keys(localNarrationRoles).find(key => localNarrationRoles[key] === name);
+            return new Option(name, role || name);
+        }));
     }
-    poemVoice.value = Array.from(poemVoice.options).some(option => option.value === selected) ? selected : 'feminine';
+    poemVoice.value = Array.from(poemVoice.options).some(option => option.value === selected) ? selected : poemVoice.options[0]?.value;
     poemVoice.dataset.provider = provider;
+    if (provider === 'local' && !force) refreshLocalNarrationVoices();
+}
+
+async function refreshLocalNarrationVoices() {
+    if (localVoicesLoading) return localVoicesLoading;
+    const button = document.getElementById('refreshLocalVoices');
+    const status = document.getElementById('localVoiceCatalogStatus');
+    if (button) { button.disabled = true; button.textContent = 'Refreshing voices…'; }
+    localVoicesLoading = (async () => {
+        try {
+            const response = await fetch('/api/tts/voices', { cache: 'no-store' });
+            if (!response.ok) throw new Error('Could not load local voices');
+            const catalog = await response.json();
+            const names = [...new Set((catalog.voices || []).map(voice => voice.name).filter(name => typeof name === 'string' && name))];
+            if (!names.length) return;
+            localNarrationVoices = names;
+            if (status) status.textContent = `${names.length} available voices`;
+            localNarrationRoles = catalog.roles || localNarrationRoles;
+            Object.assign(VOICE_NAMES, localNarrationRoles);
+            if (selectedTtsProvider() !== 'local') return;
+            populateNarrationVoices('local', true);
+            if (currentPoem && currentChatSession) {
+                updatePoemVoiceOptions(currentChatSession);
+                renderPoemAudio(currentChatSession);
+            }
+            window.Reader?.syncAudio?.();
+        } catch (error) {
+            if (status) status.textContent = 'Could not refresh voices. Try again.';
+            console.warn('Local voice catalog unavailable; keeping the current list.', error);
+        }
+    })();
+    try { await localVoicesLoading; } finally {
+        localVoicesLoading = null;
+        if (button) { button.disabled = false; button.textContent = 'Refresh voices'; }
+    }
 }
 
 let geminiPreviewVersion = 0;
@@ -313,7 +361,7 @@ function updateAudioTimeRemaining() {
         return;
     }
 
-    const remaining = audio.duration - audio.currentTime;
+    const remaining = (audio.duration - audio.currentTime) / (audio.playbackRate || 1);
     audioTimeRemainingValue.textContent = Number.isFinite(remaining)
         ? formatAudioTime(remaining)
         : '--:--';
@@ -329,6 +377,7 @@ function showAudioTimeRemaining(audio) {
 
 // Load the collection manifest, then the poems of the selected book
 async function loadBooks() {
+    let bookManifest;
     try {
         const imageResponse = await fetch('poem-images/manifest.json', { cache: 'no-store' });
         if (imageResponse.ok) poemImageLibrary = await imageResponse.json();
@@ -339,6 +388,7 @@ async function loadBooks() {
         const response = await fetch('books.json', { cache: 'no-store' });
         if (!response.ok) throw new Error(`books.json returned ${response.status}`);
         const manifest = await response.json();
+        bookManifest = manifest;
         allBooks = Array.isArray(manifest.books) ? manifest.books : [];
         if (!allBooks.length) throw new Error('books.json lists no collections.');
     } catch (error) {
@@ -351,6 +401,7 @@ async function loadBooks() {
     const requestedBook = new URLSearchParams(location.search).get('book');
     await selectBook(allBooks.some(book => book.id === requestedBook)
         ? requestedBook : getStoredBookId() || allBooks[0].id);
+    await globalThis.Reader?.boot(bookManifest);
 }
 
 function getStoredBookId() {
@@ -385,29 +436,39 @@ async function selectBook(bookId) {
     const book = allBooks.find(item => item.id === bookId);
     if (!book || book === currentBook) return;
 
+    globalThis.Reader?.beforeBook();
+    closePoemModal();
+    const selectionVersion = ++bookSelectionVersion;
     currentBook = book;
     const readerUrl = new URL(location.href);
     readerUrl.searchParams.set('book', book.id);
-    history.replaceState(null, '', readerUrl);
+    if (!globalThis.Reader) history.replaceState(null, '', readerUrl);
     try {
         localStorage.setItem(SELECTED_BOOK_STORAGE, book.id);
     } catch {
         // A blocked storage quota should not prevent the switch.
     }
 
-    closePoemModal();
     searchInput.value = '';
     clearSearch.style.display = 'none';
     applyBookIdentity(book);
 
     if (book.userPoems) {
         await migrateLocalPoems();
-        allPoems = await loadUserPoems();
+        const loaded = await loadUserPoems();
+        if (selectionVersion !== bookSelectionVersion) return;
+        allPoems = loaded;
     } else {
         try {
-            const response = await fetch(book.poems);
-            if (!response.ok) throw new Error(`${book.poems} returned ${response.status}`);
-            allPoems = await response.json();
+            let loaded = collectionTexts.get(book.id);
+            if (!loaded) {
+                const response = await fetch(book.poems);
+                if (!response.ok) throw new Error(`${book.poems} returned ${response.status}`);
+                loaded = await response.json();
+                collectionTexts.set(book.id, loaded);
+            }
+            if (selectionVersion !== bookSelectionVersion) return;
+            allPoems = loaded;
         } catch (error) {
             console.error('Error loading poems:', error);
             showError('Failed to load poems. Please try again later.');
@@ -429,6 +490,7 @@ async function selectBook(bookId) {
     updateResultCount(allPoems.length, allPoems.length);
     updateExportButton();
     loadRecentlyVisited();
+    globalThis.Reader?.bookSelected(book);
 }
 
 // The Miscellaneous shelf lives on the server so every browser and reader of
@@ -687,7 +749,7 @@ async function readPastedText() {
     pasteVoice.disabled = true;
     const wasLabel = pasteRead.textContent;
     pasteRead.textContent = 'Preparing…';
-    setPasteStatus(`${provider === 'gemini' ? 'Gemini' : 'Local Chatterbox'} TTS is preparing the reading…`);
+    setPasteStatus(`${provider === 'gemini' ? 'Gemini' : 'Local Qwen3'} TTS is preparing the reading…`);
 
     try {
         const author = pasteAuthorInput.value.trim().replace(/\s+/g, ' ');
@@ -841,6 +903,7 @@ async function openGlobalRandomPoem() {
 
 // Display poems in grid
 function displayPoems(poems) {
+    if (globalThis.Reader?.renderContents(poems)) return;
     if (poems.length === 0) {
         poemsList.innerHTML = `
             <div class="empty-state">
@@ -1069,14 +1132,21 @@ function startReadingFollowTracking() {
 }
 
 function updateReadingPosition() {
+    const partIndex = globalThis.Reader?.active
+        ? Reader.readingFollowPart() : Number(poemAudioPart.value) || 0;
+    if (partIndex === undefined) {
+        modalContent.querySelector('.poem-line.is-reading-current')?.classList.remove('is-reading-current');
+        return;
+    }
     if (followReading.getAttribute('aria-pressed') !== 'true'
         || !Number.isFinite(poemAudioPlayer.duration)
         || poemAudioPlayer.duration <= 0) return;
 
-    const partIndex = Number(poemAudioPart.value) || 0;
-    const lines = [...modalContent.querySelectorAll(`.poem-line[data-part="${partIndex}"]`)];
+    modalContent.classList.add('is-following-reading');
+    const lines = [...modalContent.querySelectorAll(partIndex === null
+        ? '.poem-line' : `.poem-line[data-part="${partIndex}"]`)];
     if (!lines.length) return;
-    const weights = lines.map(line => Math.max(1, line.textContent.trim().length));
+    const weights = lines.map(line => Math.max(1, line.querySelector('.poem-line-text').textContent.length));
     const totalWeight = weights.reduce((total, weight) => total + weight, 0);
     const target = Math.min(1, Math.max(0, poemAudioPlayer.currentTime / poemAudioPlayer.duration)) * totalWeight;
     let elapsed = 0;
@@ -1090,17 +1160,29 @@ function updateReadingPosition() {
     }
 
     const previous = modalContent.querySelector('.poem-line.is-reading-current');
-    // The narration's spoken phrasing trails the raw character estimate by
-    // about one displayed line, so keep the visual cue on the preceding line.
-    const activeLine = lines[Math.max(0, activeIndex - 1)];
-    if (previous === activeLine) return;
-    previous?.classList.remove('is-reading-current');
-    activeLine.classList.add('is-reading-current');
+    const activeLine = lines[activeIndex];
+    if (previous !== activeLine) {
+        previous?.classList.remove('is-reading-current');
+        activeLine.classList.add('is-reading-current');
+    }
+    // Source paragraphs can wrap across an entire screen. Locate the current
+    // character's rendered row rather than waiting for the paragraph to end.
+    const textNode = activeLine.querySelector('.poem-line-text').firstChild;
+    if (!textNode?.length) return;
+    const offset = Math.min(textNode.length - 1, Math.max(0,
+        Math.floor(target - (elapsed - weights[activeIndex]))));
+    const range = document.createRange();
+    range.setStart(textNode, offset);
+    range.setEnd(textNode, offset + 1);
+    const rect = range.getBoundingClientRect();
+    activeLine.style.setProperty('--reading-row-offset', `${rect.top - activeLine.getBoundingClientRect().top}px`);
     if (!poemAudioPlayer.paused) {
-        activeLine.scrollIntoView({
-            behavior: poemAudioPlayer.playbackRate > 1.25 ? 'auto' : 'smooth',
-            block: 'center'
-        });
+        const panel = document.getElementById('poemPanel');
+        const bounds = panel.getBoundingClientRect();
+        const middle = bounds.top + panel.clientHeight / 2;
+        if (Math.abs(rect.top - middle) > panel.clientHeight * 0.2) {
+            panel.scrollTo({ top: panel.scrollTop + rect.top - middle, behavior: 'instant' });
+        }
     }
 }
 
@@ -1194,8 +1276,35 @@ function getResponseAudioKey(poem, content, provider = selectedTtsProvider()) {
 }
 
 function imageIdentity(image) {
-    return image?.filename || image?.jobId || `${image?.style || ''}\n${image?.prompt || ''}`;
+    return image?.originalFilename || image?.filename || image?.jobId || `${image?.style || ''}\n${image?.prompt || ''}`;
 }
+
+let sharedImagesRefreshing = false;
+async function refreshSharedImages() {
+    if (sharedImagesRefreshing || document.hidden) return;
+    sharedImagesRefreshing = true;
+    try {
+        const migration = await window.SharedImages?.sync();
+        const response = await fetch('poem-images/manifest.json', {cache:'no-store'});
+        if (!response.ok) return;
+        poemImageLibrary = await response.json();
+        for (const poem of allPoems) {
+            const session = poemChatSessions.get(poem);
+            if (!session) continue;
+            const shared = poemImageLibrary[getPoemId(poem)] || [];
+            const merged = mergePoemImages(shared, session.images.filter(image => !image.filename?.startsWith('poem-images/') && !migration?.deleted?.includes(`${getPoemId(poem)}:${imageIdentity(image)}`)));
+            if (JSON.stringify(merged) !== JSON.stringify(session.images)) {
+                session.images = merged;
+                if (session === currentChatSession) renderPoemImages(poem, session);
+            }
+        }
+        if (migration?.failed && currentChatSession) setPoemImagesStatus('Some browser images could not be shared. Refresh when the image server is available.', 'error');
+    } catch (error) { console.warn('Could not refresh shared images:', error); }
+    finally { sharedImagesRefreshing = false; }
+}
+document.addEventListener('DOMContentLoaded', refreshSharedImages);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSharedImages(); });
+setInterval(refreshSharedImages, 15000);
 
 function storedBrowserImages() {
     const items = [];
@@ -1231,6 +1340,7 @@ function storedBrowserImages() {
 async function loadImageLibrary() {
     imageLibraryStatus.textContent = 'Loading images…';
     try {
+        await refreshSharedImages();
         const response = await fetch('/api/image-library', { cache: 'no-store' });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || `Image library returned ${response.status}`);
@@ -1239,8 +1349,8 @@ async function loadImageLibrary() {
             id: `shared:${image.poemId}:${image.filename}`,
             source: 'shared'
         }));
-        const seen = new Set(shared.map(item => item.filename));
-        imageLibraryItems = [...shared, ...storedBrowserImages().filter(item => !seen.has(item.filename))];
+        const seen = new Set(shared.map(imageIdentity));
+        imageLibraryItems = [...shared, ...storedBrowserImages().filter(item => !seen.has(imageIdentity(item)))];
         renderImageLibrary();
     } catch (error) {
         imageLibraryStatus.textContent = `Could not load images: ${error.message}`;
@@ -2130,7 +2240,7 @@ function getSavedImageScene(image) {
 async function requestModelJson(path, options = {}, operation = 'Scene planning') {
     for (let attempt = 0; attempt < 3; attempt++) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), path === '/v1/models' ? 15000 : 90000);
+        const timer = setTimeout(() => controller.abort(), path === '/v1/models' ? 15000 : 330000);
         try {
             const response = await fetch(`${CHAT_PROXY_URL}${path}`, {
                 ...options, cache: 'no-store', signal: controller.signal
@@ -2683,8 +2793,10 @@ function renderPoemImages(poem, session) {
 
     const count = getPoemImageCount(poem);
     const visibleImages = session.images.filter(image => image.status !== 'error');
-    generateImages.textContent = visibleImages.length ? `Generate ${count} more` : `Generate ${count} image${count === 1 ? '' : 's'}`;
+    generateImages.textContent = visibleImages.length ? `Generate ${count} new image${count === 1 ? '' : 's'}` : `Generate ${count} image${count === 1 ? '' : 's'}`;
     generateImages.disabled = session.imagesLoading;
+    stopImages.hidden = !session.imagesLoading;
+    stopImages.disabled = Boolean(session.imageStopRequested);
 
     if (session.images.length === 0) {
         if (session.imagePlanningActive) {
@@ -2822,6 +2934,35 @@ async function deletePoemImage(poem, session, image) {
     }
 }
 
+async function cancelFluxImage(image) {
+    const response = await fluxFetch(`/jobs/${encodeURIComponent(image.jobId)}/cancel`, { method: 'POST' });
+    await readFluxJson(response, 'Could not stop image generation');
+    image.status = 'error';
+    image.error = 'Image generation stopped.';
+}
+
+async function stopPoemImages() {
+    const poem = currentPoem;
+    const session = currentChatSession;
+    if (!session || !session.imagesLoading || session.imageStopRequested) return;
+    session.imageStopRequested = true;
+    session.imagePlanningNotice = 'Image generation stopped.';
+    renderPoemImages(poem, session);
+    setPoemImagesStatus('Stopping image generation…', 'working');
+    const pending = session.images.filter(image => image.jobId && ['queued', 'generating'].includes(image.status));
+    const results = await Promise.allSettled(pending.map(cancelFluxImage));
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) {
+        session.imageStopRequested = false;
+        session.imagePlanningNotice = `Could not stop every image: ${failed.reason.message}`;
+    }
+    savePoemSession(poem, session);
+    if (currentChatSession === session) {
+        renderPoemImages(poem, session);
+        setPoemImagesStatus(failed ? session.imagePlanningNotice : 'Stop requested. Finishing any pending request…', failed ? 'error' : 'working');
+    }
+}
+
 async function submitFluxImage(prompt) {
     const response = await fluxFetch('/generate', {
         method: 'POST',
@@ -2855,6 +2996,17 @@ function wait(milliseconds) {
     return new Promise(resolve => window.setTimeout(resolve, milliseconds));
 }
 
+function completeImageJob(session, image, completed) {
+    const outputs = (completed.images || []).filter(output => output.filename);
+    if (!outputs.length) return;
+    Object.assign(image, {status:'done', filename:outputs[0].filename});
+    for (const output of outputs.slice(1)) {
+        if (!session.images.some(saved => imageIdentity(saved) === output.filename)) {
+            session.images.push({...image, filename:output.filename});
+        }
+    }
+}
+
 async function pollPoemImageJobs(poem, session) {
     if (session.imagePollActive) return;
     session.imagePollActive = true;
@@ -2883,8 +3035,7 @@ async function pollPoemImageJobs(poem, session) {
                 if (completed) {
                     delete image.missingStatusChecks;
                     if (completed.state === 'done' && completed.images?.[0]?.filename) {
-                        image.status = 'done';
-                        image.filename = completed.images[0].filename;
+                        completeImageJob(session, image, completed);
                     } else {
                         image.status = 'error';
                         image.error = completed.error || `Job ${completed.state}`;
@@ -2936,8 +3087,7 @@ async function reconcilePoemImageJobs(poem, session) {
         recoverable.forEach(image => {
             const completed = (status.recent_done || []).find(job => job.id === image.jobId);
             if (completed?.state === 'done' && completed.images?.[0]?.filename) {
-                image.status = 'done';
-                image.filename = completed.images[0].filename;
+                completeImageJob(session, image, completed);
                 delete image.error;
                 delete image.missingStatusChecks;
             } else if (completed) {
@@ -2973,9 +3123,12 @@ async function generatePoemImageSet() {
 
     session.imagesLoading = true;
     session.imagePlanningActive = true;
+    session.imageStopRequested = false;
     session.imagePlanningIndex = 0;
     session.imagePlanningNotice = '';
     generateImages.disabled = true;
+    stopImages.hidden = false;
+    stopImages.disabled = false;
     setPoemImagesStatus('Connecting to the image service…', 'working');
 
     const count = getPoemImageCount(poem);
@@ -2991,12 +3144,12 @@ async function generatePoemImageSet() {
     try {
         await getFluxStatus();
         for (let index = 0; index < count; index++) {
-            if (!isCurrent()) return;
+            if (!isCurrent() || session.imageStopRequested) return;
             session.imagePlanningIndex = index + 1;
             renderPoemImages(poem, session);
             const direction = getImageDirection(variationOffset + index);
             const scene = await describePoemScene(poem, direction, steer, previousScenes);
-            if (!isCurrent()) return;
+            if (!isCurrent() || session.imageStopRequested) return;
 
             const [prompt] = getImagePrompts(poem, [scene], variationOffset + index, styles, steer);
             const image = { ...prompt, sceneMode, status: 'queued', jobId: null, filename: null };
@@ -3010,6 +3163,7 @@ async function generatePoemImageSet() {
             // concurrently with planning the next scene; submission is not retried.
             try {
                 image.jobId = await submitFluxImage(image.prompt);
+                if (session.imageStopRequested) await cancelFluxImage(image);
             } catch (error) {
                 image.status = 'error';
                 image.error = error.message;
@@ -3022,7 +3176,9 @@ async function generatePoemImageSet() {
         }
     } catch (error) {
         console.warn('Image planning stopped:', error);
-        if (!newImages.length) {
+        if (session.imageStopRequested) {
+            session.imagePlanningNotice = 'Image generation stopped.';
+        } else if (!newImages.length) {
             session.imagePlanningNotice = error.code === 'SCENE_PLANNING_EXHAUSTED'
                 ? 'No new distinct scene found. Try directing the next image toward another moment or detail in the text.'
                 : `Could not plan images: ${error.message}`;
@@ -3336,9 +3492,11 @@ function splitNarrationText(text, limit) {
     return parts;
 }
 
-function getNarrationParts(poem, provider = selectedTtsProvider()) {
+function getNarrationParts(poem, provider = selectedTtsProvider(), book = currentBook) {
     const text = getReadablePoemText(poem);
-    const partLimit = provider === 'gemini' ? GEMINI_NARRATION_PART_LIMIT : NARRATION_PART_LIMIT;
+    const configuredLimit = book?.geminiNarrationPartLimits?.[poem.title];
+    const geminiLimit = Number.isInteger(configuredLimit) && configuredLimit >= 1800 ? Math.min(configuredLimit, GEMINI_NARRATION_PART_LIMIT) : GEMINI_NARRATION_PART_LIMIT;
+    const partLimit = provider === 'gemini' ? geminiLimit : NARRATION_PART_LIMIT;
     return splitNarrationText(text, partLimit);
 }
 
@@ -3431,6 +3589,7 @@ function updatePoemVoiceOptions(session) {
 
 function renderPoemAudio(session) {
     window.refreshChapterRecording?.();
+    if (globalThis.Reader?.active) { Reader.renderAudio(session); return; }
     const provider = selectedTtsProvider();
     const voice = poemVoice.value;
     const { parts, index, text, slot } = selectedNarrationPart(currentPoem, voice);
@@ -3496,7 +3655,7 @@ function renderPoemAudio(session) {
         generateAudio.textContent = parts.length > 1 ? `Generate part ${index + 1}` : 'Generate reading';
         setPoemAudioStatus(
             `${parts.length > 1 ? `Part ${index + 1} of ${parts.length} · ` : ''}${text.length.toLocaleString()} characters · `
-            + `${ttsVoiceName(voice, provider)} is ready with ${provider === 'gemini' ? `Gemini · ${formatGeminiTtsCost(text, "estimated selected-part cost")} · ${formatWholeWorkGeminiCost(currentPoem)}` : 'local Chatterbox'}.`,
+            + `${ttsVoiceName(voice, provider)} is ready with ${provider === 'gemini' ? `Gemini · ${formatGeminiTtsCost(text, "estimated selected-part cost")} · ${formatWholeWorkGeminiCost(currentPoem)}` : 'local Qwen3'}.`,
             'idle'
         );
     }
@@ -3510,6 +3669,7 @@ function renderPoemAudio(session) {
 }
 
 async function generatePoemReading() {
+    if (globalThis.Reader?.active) return Reader.generateSelected(false);
     const poem = currentPoem;
     const session = currentChatSession;
     const voice = poemVoice.value;
@@ -3534,7 +3694,7 @@ async function generatePoemReading() {
     const estimatedAudioSeconds = Math.max(10, Math.round(text.length / 15));
     const partDetail = parts.length > 1 ? `Part ${index + 1} of ${parts.length}` : 'Complete reading';
     const voiceName = ttsVoiceName(voice, provider);
-    let generationStage = provider === 'gemini' ? 'sending text to Gemini TTS' : 'sending text to local Chatterbox TTS';
+    let generationStage = provider === 'gemini' ? 'sending text to Gemini TTS' : 'sending text to local Qwen3 TTS';
     const showGenerationProgress = () => {
         if (currentChatSession !== session || !session.audioLoading) return;
         const elapsed = Math.floor((Date.now() - startedAt) / 1000);
@@ -3606,7 +3766,7 @@ async function generatePoemReading() {
     }
 }
 
-async function runNarrationQueue(parts, isCurrent, label) {
+async function runNarrationQueue(parts, isCurrent, label, startIndex = 0) {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     const apiKey = getGeminiApiKey();
     if (apiKey) headers.set('X-Gemini-API-Key', apiKey);
@@ -3657,18 +3817,19 @@ async function runNarrationQueue(parts, isCurrent, label) {
     while (job && isCurrent()) {
         let detail = 'Waiting in the server queue. You can leave this page.';
         if (job.state === 'running') {
-            const part = job.part || job.completed + 1;
+            const part = startIndex + (job.part || job.completed + 1);
             const elapsed = job.stageStartedAt ? ` · ${Math.max(0, Math.floor(Date.now() / 1000 - job.stageStartedAt))}s` : '';
             detail = `Generating part ${part}`
                 + (job.chunks > 1 ? ` · segment ${job.chunk}/${job.chunks}` : '')
                 + (job.attempt ? ` · attempt ${job.attempt}/${job.maxAttempts || 1}` : '') + elapsed;
+            if (job.stage === 'pacing') detail = `Part ${part} · pacing requests · starts in ${Math.max(0, Math.ceil(job.retryAt - Date.now() / 1000))}s.`;
             if (job.stage === 'waiting') detail = `Part ${part} · waiting for another narration to finish.`;
             if (job.stage === 'retrying') {
                 detail = `Part ${part} · ${job.retryReason || 'Temporary provider error'} · retrying in `
                     + `${Math.max(0, Math.ceil(job.retryAt - Date.now() / 1000))}s (attempt ${job.attempt + 1}/${job.maxAttempts}).`;
             }
         }
-        if (job.state === 'failed') throw new Error(job.error || 'Narration stopped. Choose Generate missing parts to resume.');
+        if (job.state === 'failed') throw new Error(`Part ${startIndex + (job.part || job.completed + 1)} · ${(job.error || 'Narration stopped. Choose Generate missing parts to resume.').replace(/^Stopped at part \d+ of \d+\.\s*/, '')}`);
         setPoemAudioStatus(
             `${label} · ${job.completed} of ${job.total} parts · ${job.reused} reused · `
             + (job.state === 'done' ? 'Ready.' : detail),
@@ -3683,6 +3844,7 @@ async function runNarrationQueue(parts, isCurrent, label) {
 }
 
 async function generateWholeChapter() {
+    if (globalThis.Reader?.active) return Reader.generateSelected(true);
     const poem = currentPoem;
     const session = currentChatSession;
     const voice = poemVoice.value;
@@ -3705,7 +3867,7 @@ async function generateWholeChapter() {
     let ready = false;
     let failure = null;
     try {
-        ready = await runNarrationQueue(requests, isCurrent, `Parts ${startIndex + 1}–${parts.length}`);
+        ready = await runNarrationQueue(requests, isCurrent, `Parts ${startIndex + 1}–${parts.length}`, startIndex);
     } catch (error) {
         failure = error;
     } finally {
@@ -3724,12 +3886,28 @@ async function generateWholeChapter() {
     }
 }
 
+// Saved performances can predate a text import or use different part boundaries.
+// Keep their identity separate from availability for the current chapter text.
+function savedRecordingParts(recordings, voice, provider, model) {
+    const parts = (recordings || []).filter(record => record.voice === voice &&
+        record.provider === provider && record.model === (provider === 'local' ? 'Qwen3-TTS' : model)).map(record => {
+        const part = record.filename.match(/ - Part (\d+) - /);
+        const key = record.url.match(/^\/api\/tts\/audio\/([a-f0-9]{64})\//)?.[1];
+        return part && key ? { index: Number(part[1]), key } : null;
+    }).filter(Boolean).sort((a, b) => a.index - b.index);
+    // Ambiguous versions or gaps require selection rather than accidental mixing.
+    return parts.length && parts.every((part, index) => part.index === index + 1)
+        ? parts.map(part => part.key) : [];
+}
+
 async function stitchWholeChapter(autoPlay = false) {
     const poem = currentPoem;
+    const book = currentBook;
     const session = currentChatSession;
     const voice = poemVoice.value;
     const provider = selectedTtsProvider();
     if (!poem || !session || session.audioLoading) return;
+    const readerTarget = globalThis.Reader?.active ? Reader.capture() : null;
     const parts = getNarrationParts(poem);
     if (parts.length <= 1) return;
     stitchChapterAudio.disabled = true;
@@ -3752,7 +3930,7 @@ async function stitchWholeChapter(autoPlay = false) {
                 { voice: otherVoice, provider, model: otherModel }
             ]
             : [{ voice, provider, model }, { voice: otherVoice, provider, model }];
-        const response = await fetch('/api/tts/stitch', {
+        let response = await fetch('/api/tts/stitch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3763,14 +3941,32 @@ async function stitchWholeChapter(autoPlay = false) {
                     text,
                     voice,
                     kind: 'poem',
-                    book: currentBook?.id || '',
+                    book: book?.id || '',
                     filename,
                     provider,
-                    model: ttsModelKey(provider),
+                    model,
                     speakTitle: index === 0
                 }))
             })
         });
+        let savedPartCount = 0;
+        if (response.status === 409) {
+            const catalog = await fetch('/api/tts/recordings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ book: book.id, title: poem.title })
+            });
+            if (catalog.ok) {
+                const saved = await catalog.json();
+                const savedKeys = savedRecordingParts(saved.recordings, voice, provider, model);
+                if (savedKeys.length) {
+                    savedPartCount = savedKeys.length;
+                    response = await fetch('/api/tts/stitch', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ book: book.id, title: poem.title, savedKeys, filename })
+                    });
+                }
+            }
+        }
         if (!response.ok) {
             const payload = await response.json().catch(() => ({}));
             throw new Error(payload.error || `Chapter assembly returned ${response.status}.`);
@@ -3778,13 +3974,17 @@ async function stitchWholeChapter(autoPlay = false) {
         const blob = await response.blob();
         const mixSummary = response.headers.get('X-Audio-Mix') || '';
         const namedPath = response.headers.get('X-Audio-Path') || URL.createObjectURL(blob);
-        poemAudioPlayer.pause();
-        wholeChapterPlayback = null;
-        poemAudioPlayer.src = namedPath;
-        poemAudioPlayer.hidden = false;
+        if (readerTarget) Reader.rememberComplete(readerTarget, namedPath, savedPartCount ? 'Saved recording version' : 'Complete chapter');
+        if (!globalThis.Reader?.active) {
+            poemAudioPlayer.pause();
+            wholeChapterPlayback = null;
+            poemAudioPlayer.src = namedPath;
+            poemAudioPlayer.hidden = false;
+        }
         setDownloadLink(downloadAudio, downloadableAudioUrl(namedPath), filename);
-        setPoemAudioStatus(`Complete chapter ready · ${parts.length} parts · ${mixSummary} · ${formatFileSize(blob.size)}.`, 'ready');
-        if (autoPlay) poemAudioPlayer.play().catch(() => {});
+        setPoemAudioStatus(`${savedPartCount ? 'Saved recording joined' : 'Complete chapter ready'} · ${savedPartCount || parts.length} parts · ${mixSummary} · ${formatFileSize(blob.size)}.`, 'ready');
+        if (autoPlay && globalThis.Reader?.active && currentPoem === poem) Reader.playExternal(namedPath, "Complete chapter");
+        else if (autoPlay && !globalThis.Reader?.active) poemAudioPlayer.play().catch(() => {});
     } catch (error) {
         setPoemAudioStatus(error.message, 'error');
     } finally {
@@ -3793,49 +3993,8 @@ async function stitchWholeChapter(autoPlay = false) {
     }
 }
 
-async function generateWholeCollection() {
-    const book = currentBook;
-    const poems = [...allPoems];
-    // Collection batches are intentionally deterministic: the local engine's
-    // primary literary voice gives every chapter one consistent performance,
-    // regardless of the source and voice currently selected in the panel.
-    const provider = 'local';
-    const model = 'local';
-    const voice = 'feminine';
-    if (!book || !poems.length || collectionAudioBatchRunning || currentChatSession?.audioLoading) return;
-
-    const jobs = poems.flatMap(poem => getNarrationParts(poem, provider).map((text, index, parts) => ({
-        poem, text, index, total: parts.length
-    })));
-    if (!window.confirm(
-        `Generate ${jobs.length} narration parts for all ${poems.length} texts in ${book.name} with Local voice 1? Existing recordings will be reused.`
-    )) return;
-
-    collectionAudioBatchRunning = true;
-    const session = currentChatSession;
-    if (session) session.audioLoading = true;
-    const controls = [generateAudio, generateAllAudio, generateCollectionAudio, playAllAudio,
-        poemVoice, ttsProvider, geminiTtsModel, poemAudioPart];
-    controls.forEach(control => { control.disabled = true; });
-    const isCurrent = () => currentBook === book && currentChatSession === session;
-    const requests = jobs.map(job => ({
-        title: narrationRequestTitle(job.poem, job.index, job.total),
-        text: job.text, voice, provider, model, kind: 'poem', book: book.id,
-        speakTitle: job.index === 0,
-        filename: buildDownloadName(job.poem, [`Part ${job.index + 1}`, ttsVoiceName(voice, provider)], 'wav')
-    }));
-    try {
-        await runNarrationQueue(requests, isCurrent, book.name);
-    } catch (error) {
-        if (isCurrent()) setPoemAudioStatus(error.message, 'error');
-    } finally {
-        collectionAudioBatchRunning = false;
-        if (session) session.audioLoading = false;
-        if (isCurrent()) controls.forEach(control => { control.disabled = false; });
-    }
-}
-
 function playWholeChapter() {
+    if (globalThis.Reader?.active) return Reader.playSelected();
     const poem = currentPoem;
     const session = currentChatSession;
     const voice = poemVoice.value;
@@ -3883,6 +4042,7 @@ async function playWholeChapterPart() {
 }
 
 function advanceWholeChapterPlayback() {
+    if (globalThis.Reader?.active) return Reader.ended();
     if (!wholeChapterPlayback) {
         clearReadingPosition();
         return;
@@ -3892,6 +4052,7 @@ function advanceWholeChapterPlayback() {
 }
 
 function playSavedPoemReading() {
+    if (globalThis.Reader?.active) return Reader.playSelected();
     if (!poemAudioPlayer.src) return;
     if (poemAudioPlayer.ended) poemAudioPlayer.currentTime = 0;
     poemAudioPlayer.play().catch(() => {});
@@ -3927,6 +4088,7 @@ function setModalTab(tabName, focusTab = false) {
         tab.tabIndex = isActive ? 0 : -1;
         if (isActive && focusTab) tab.focus();
     });
+    globalThis.Reader?.updatePanelSemantics();
 }
 
 // Mobile browser chrome and the software keyboard can change the visible
@@ -3947,6 +4109,7 @@ function syncMobileModalViewport() {
 
 // Open poem modal
 function openPoemModal(poem) {
+    globalThis.Reader?.beforeOpen();
     recordPoemVisit(poem);
     currentPoem = poem;
     currentChatSession = getPoemChatSession(poem);
@@ -3965,7 +4128,7 @@ function openPoemModal(poem) {
     // Check every offered performance up front so all previously generated
     // readings appear as saved choices without requiring the reader to select
     // each voice first.
-    POEM_VOICES.forEach(voice => {
+    if (!globalThis.Reader?.active) POEM_VOICES.forEach(voice => {
         const parts = getNarrationParts(poem);
         const index = Number(poemAudioPart.value) || 0;
         const slot = ttsAudioSlot(voice, index, parts.length);
@@ -3980,21 +4143,24 @@ function openPoemModal(poem) {
     document.body.style.overflow = 'hidden';
     connectChatSession(currentChatSession);
     reconcilePoemImageJobs(poem, currentChatSession);
-    if (!window.matchMedia('(max-width: 768px)').matches) {
+    if (globalThis.Reader?.active) Reader.opened(poem);
+    else if (!window.matchMedia('(max-width: 768px)').matches) {
         window.setTimeout(() => chatInput.focus(), 100);
     }
 }
 
 // Close poem modal
 function closePoemModal() {
+    globalThis.Reader?.savePosition();
     wholeChapterPlayback = null;
-    poemAudioPlayer.pause();
+    if (!globalThis.Reader?.active) poemAudioPlayer.pause();
     chatHistory.hidden = true;
     toggleChatHistory.setAttribute('aria-expanded', 'false');
     poemModal.classList.remove('show');
     poemModal.style.removeProperty('--mobile-modal-height');
     poemModal.style.removeProperty('--mobile-modal-top');
     document.body.style.overflow = 'auto';
+    globalThis.Reader?.closed();
 }
 
 // Search functionality
@@ -4100,6 +4266,7 @@ cancelEdit.addEventListener('click', cancelUserPoemEdit);
 pasteRead.addEventListener('click', readPastedText);
 exportPoems.addEventListener('click', exportUserPoems);
 generateImages.addEventListener('click', generatePoemImageSet);
+stopImages.addEventListener('click', stopPoemImages);
 saveImageApiKey.addEventListener('click', saveFluxApiKey);
 imageApiKey.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
@@ -4111,13 +4278,13 @@ generateAudio.addEventListener('click', generatePoemReading);
 generateAllAudio.addEventListener('click', generateWholeChapter);
 stitchChapterAudio.addEventListener('click', () => stitchWholeChapter(false));
 playCompleteChapter.addEventListener('click', () => {
+    if (globalThis.Reader?.active) return Reader.playComplete();
     poemAudioPlayer.pause();
     wholeChapterPlayback = null;
     poemAudioPlayer.src = chapterVCompleteUrl;
     poemAudioPlayer.hidden = false;
     poemAudioPlayer.play().catch(() => {});
 });
-generateCollectionAudio.addEventListener('click', generateWholeCollection);
 playAllAudio.addEventListener('click', playWholeChapter);
 playSavedAudio.addEventListener('click', playSavedPoemReading);
 followReading.addEventListener('click', toggleFollowReading);
@@ -4127,11 +4294,18 @@ poemAudioPlayer.addEventListener('ratechange', updateReadingPosition);
 poemAudioPlayer.addEventListener('play', startReadingFollowTracking);
 poemAudioPlayer.addEventListener('pause', stopReadingFollowTracking);
 poemAudioPlayer.addEventListener('ended', advanceWholeChapterPlayback);
+poemVoice.addEventListener('focus', () => {
+    if (selectedTtsProvider() === 'local') refreshLocalNarrationVoices();
+});
+document.getElementById('refreshLocalVoices').addEventListener('click', refreshLocalNarrationVoices);
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && selectedTtsProvider() === 'local') refreshLocalNarrationVoices();
+});
 poemVoice.addEventListener('change', () => {
     wholeChapterPlayback = null;
-    if (selectedTtsProvider() === 'gemini') {
-        try { localStorage.setItem(GEMINI_VOICE_STORAGE, poemVoice.value); } catch {}
-    }
+    try {
+        localStorage.setItem(selectedTtsProvider() === 'gemini' ? GEMINI_VOICE_STORAGE : LOCAL_VOICE_STORAGE, poemVoice.value);
+    } catch {}
     updateGeminiVoicePreview();
     if (currentChatSession) renderPoemAudio(currentChatSession);
 });

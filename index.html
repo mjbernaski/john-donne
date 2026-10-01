@@ -5,12 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Poems of John Donne</title>
     <link rel="stylesheet" href="styles.css?v=20260911-ak">
+    <link rel="stylesheet" href="library.css">
+    <link rel="stylesheet" href="reader.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
+    <nav class="reader-shell-bar" aria-label="Reading room">
+        <a href="library.html" data-reader-route>Reading room <span> / Library</span></a>
+        <div><a href="images.html" target="_blank" rel="noopener">Images ↗</a>
+        <a href="voices.html" target="_blank" rel="noopener">Voices ↗</a>
+        <label class="reader-preview-toggle"><input type="checkbox" data-reader-part-lines checked> Part lines</label>
+        <label class="reader-preview-toggle"><input type="checkbox" data-reader-preview> New reader <small>Preview</small></label></div>
+    </nav>
+    <main id="readerLibrary" class="library-container" hidden>
+        <nav hidden class="library-nav" aria-label="Main navigation">
+            <a href="index.html">Reading room</a>
+            <div><a href="images.html">Images</a><a href="voices.html">Narration voices</a></div>
+        </nav>
+        <header class="library-heading">
+            <p class="library-eyebrow">Your collection</p>
+            <h1>The library</h1>
+            <p>Poetry, stories, and ideas. Find something to spend time with.</p>
+            <a id="continueReading" class="library-continue" href="index.html" hidden></a>
+        </header>
+        <section class="library-controls" aria-label="Browse the library">
+            <label class="library-search">Search the library<input id="librarySearch" type="search" placeholder="Title, author, or translation…" autocomplete="off"></label>
+            <label>Sort by<select id="librarySort"><option value="author">Author</option><option value="title">Title</option><option value="category">Category</option></select></label>
+            <div id="libraryFilters" class="library-filters" role="group" aria-label="Filter by category"></div>
+        </section>
+        <p id="libraryStatus" class="library-status" role="status" aria-live="polite">Loading your library…</p>
+        <div id="libraryGrid" class="library-grid"></div>
+        <button id="libraryReset" class="library-reset" hidden>Clear filters</button>
+    </main>
+    <div class="container" id="readerCollection">
         <header class="header">
             <div class="header-content">
                 <nav id="bookSwitcher" class="book-switcher" aria-label="Choose a collection"></nav>
@@ -119,6 +148,7 @@
                                         <h3 id="poemImagesTitle" class="poem-images-title">Images inspired by the poem</h3>
                                     </div>
                                     <button id="generateImages" class="poem-images-generate" type="button">Generate images</button>
+                                    <button id="stopImages" class="poem-images-generate" type="button" hidden>Stop</button>
                                 </div>
                                 <p id="poemImagesStatus" class="poem-images-status" role="status" aria-live="polite"></p>
                                 <div id="imageKeySetup" class="image-key-setup" hidden>
@@ -151,7 +181,7 @@
                             <section class="poem-audio" aria-labelledby="poemAudioTitle">
                                 <div class="poem-audio-heading">
                                     <div>
-                                        <p id="poemAudioEyebrow" class="poem-audio-eyebrow">Local Chatterbox narration</p>
+                                        <p id="poemAudioEyebrow" class="poem-audio-eyebrow">Local Qwen3 narration</p>
                                         <h3 id="poemAudioTitle" class="poem-audio-title">Hear the poem aloud</h3>
                                     </div>
                                     <div class="poem-audio-actions">
@@ -185,6 +215,8 @@
                                             </label>
                                         </div>
                                         <div class="poem-audio-buttons">
+                                            <button id="refreshLocalVoices" class="play-saved-audio" type="button">Refresh voices</button>
+                                            <span id="localVoiceCatalogStatus" role="status" aria-live="polite"></span>
                                             <button id="previewGeminiVoice" class="play-saved-audio" type="button" hidden>Preview selected voice</button>
                                             <button id="playSavedAudio" class="play-saved-audio" type="button" hidden>Play selected part</button>
                                             <button id="playAllAudio" class="play-saved-audio" type="button" hidden>Play from selected part</button>
@@ -196,7 +228,6 @@
                                             <button id="followReading" class="follow-reading-toggle" type="button" aria-pressed="false">Follow text</button>
                                             <a id="downloadAudio" class="media-download" download hidden>Download</a>
                                         </div>
-                                        <button id="generateCollectionAudio" class="generate-collection-audio" type="button">Generate missing audio for this collection</button>
                                         <div id="geminiVoicePreview" hidden>
                                             <p id="geminiVoicePreviewStatus" role="status"></p>
                                             <audio id="geminiVoicePreviewPlayer" controls preload="none" hidden aria-label="Selected voice preview"></audio>
@@ -218,7 +249,8 @@
                                     <p id="chapterRecordingStatus" class="poem-audio-status" role="status"></p>
                                     <label for="chapterRecordingPart">Saved audio</label>
                                     <select id="chapterRecordingPart"></select>
-                                    <audio id="chapterRecordingPlayer" controls preload="none" aria-label="Saved chapter recording"></audio>
+                                    <button id="chapterRecordingPlay" type="button">Play saved recording</button>
+                                    <button id="chapterRecordingStop" type="button" hidden>Stop generation</button>
                                     <a id="chapterRecordingDownload" class="media-download" download hidden>Download complete chapter</a>
                                 </div>
                             </section>
@@ -317,7 +349,10 @@
         <strong id="audioTimeRemainingValue" class="audio-time-remaining-value">--:--</strong>
     </div>
 
-    <script src="app.js?v=20260911-discuss-evidence"></script>
-    <script src="chapter-recordings.js?v=20260923"></script>
+    <script src="shared-images.js"></script>
+    <script src="app.js?v=20261001-saved-recording-assembly"></script>
+    <script src="streaming-tts.js?v=20261001"></script>
+    <script src="reader.js?v=20261001-saved-recording-assembly"></script>
+    <script src="chapter-recordings.js?v=20260930-stop-narration"></script>
 </body>
 </html>

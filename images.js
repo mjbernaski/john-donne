@@ -4,6 +4,7 @@ const selectAll = document.getElementById('managerSelectAll');
 const deleteButton = document.getElementById('managerDelete');
 const refreshButton = document.getElementById('managerRefresh');
 let images = [];
+let loading = false;
 
 function selectedImages() {
     const selected = new Set([...grid.querySelectorAll('input:checked')].map(input => input.value));
@@ -52,17 +53,22 @@ function render() {
 }
 
 async function loadImages() {
+    if (loading) return;
+    loading = true;
     refreshButton.disabled = true;
     statusElement.textContent = 'Loading images…';
     try {
+        const migration = await window.SharedImages?.sync();
         const response = await fetch('/api/image-library', { cache: 'no-store' });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
         images = Array.isArray(payload.images) ? payload.images : [];
         render();
+        if (migration?.failed) statusElement.textContent += ' · Some browser images could not be shared; refresh when the image server is available.';
     } catch (error) {
         statusElement.textContent = `Could not load images: ${error.message}`;
     } finally {
+        loading = false;
         refreshButton.disabled = false;
     }
 }
@@ -97,3 +103,5 @@ selectAll.addEventListener('change', () => {
 deleteButton.addEventListener('click', deleteSelected);
 refreshButton.addEventListener('click', loadImages);
 loadImages();
+window.addEventListener('focus', loadImages);
+setInterval(() => { if (!document.hidden && !selectedImages().length) loadImages(); }, 15000);

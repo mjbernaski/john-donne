@@ -1711,22 +1711,6 @@ body {
     gap: 8px;
 }
 
-.poem-audio-actions > .generate-collection-audio {
-    justify-self: end;
-    padding: 2px 0;
-    border: 0;
-    background: transparent;
-    color: var(--text-light);
-    font-size: 0.66rem;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.poem-audio-actions > .generate-collection-audio:hover:not(:disabled) {
-    color: var(--secondary-color);
-}
-
 .poem-audio-actions select,
 .poem-audio-actions button {
     padding: 8px 10px;
@@ -1888,7 +1872,7 @@ body {
 .modal-poem-content.is-following-reading .poem-line.is-reading-current::before {
     content: '';
     position: absolute;
-    top: -1.65em;
+    top: calc(var(--reading-row-offset, 0px) - 1.65em);
     left: 0.55rem;
     width: 3px;
     height: 5.2em;

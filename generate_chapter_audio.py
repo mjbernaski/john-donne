@@ -25,7 +25,8 @@ def chapter_requests(chapter, provider, voice, model):
     text = re.sub(r'''(?m)^\s*\d+(?=[^\W\d_]|['‘’“"(&])''', '', text)
     text = re.sub(r'(?m)^\s*(\d*[05])(?=\d+\s)', '', text)
     text = re.sub(r'\n{3,}', '\n\n', text).strip()
-    parts = server.PoetryRequestHandler._split_tts_text(text, 1800 if provider == 'gemini' else 300)
+    limit = server.PoetryRequestHandler._narration_part_limit(chapter['title'], server.BOOKS_BY_ID['new-england-mind'], provider)
+    parts = server.PoetryRequestHandler._split_tts_text(text, limit)
     return [dict(title=chapter['title'] if i == 0 else f"{chapter['title']} · Part {i + 1}",
                  text=part, voice=voice, provider=provider, model=model, kind='poem',
                  book='new-england-mind', speakTitle=i == 0,

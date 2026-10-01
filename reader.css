@@ -1,0 +1,199 @@
+/* Shared shell. The literary presentation stays opt-in. */
+[hidden] { display: none !important; }
+.reader-shell-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:64px; padding:12px 28px; border-bottom:1px solid var(--border-color); background:var(--bg-color); font-size:.78rem; position:relative; z-index:1050; }
+.reader-shell-bar a { color:var(--primary-color); text-decoration:none; }
+.reader-shell-bar > a { font:600 1.35rem var(--font-serif); }
+.reader-shell-bar > div { display:flex; align-items:center; gap:22px; }
+.reader-preview-toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; font:500 .75rem var(--font-sans); color:var(--text-color); }
+.reader-preview-toggle input { accent-color:var(--secondary-color); width:16px; height:16px; }
+.reader-preview-toggle small { border:1px solid var(--border-color); border-radius:4px; padding:2px 5px; }
+.reader-tools { display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
+.reader-entry-nav, .reader-tools-options { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.reader-tools button, .reader-listen button, .reader-part-heading button, .reader-player button, .reader-queue button, #readerResume, .reader-generate-dialog button, #chapterRecordingPlay { border:1px solid var(--border-color); color:var(--primary-color); background:var(--card-bg); padding:9px 13px; border-radius:6px; cursor:pointer; font:500 .75rem/1.4 var(--font-sans); min-height:40px; }
+.reader-tools button:disabled, .reader-player button:disabled { opacity:.45; cursor:default; }
+.reader-tools details { position:relative; font-size:.8rem; }
+.reader-tools summary, .reader-audio-settings > summary, .reader-player-more summary { cursor:pointer; padding:10px 0; color:var(--secondary-color); }
+.reader-appearance-fields { position:absolute; z-index:30; right:0; width:260px; padding:20px; border:1px solid var(--border-color); border-radius:8px; background:var(--card-bg); box-shadow:var(--shadow-hover); display:grid; gap:14px; }
+.reader-appearance-fields label { display:grid; grid-template-columns:1fr auto; gap:6px; }
+.reader-appearance-fields input, .reader-appearance-fields select { grid-column:1/-1; width:100%; }
+.reader-appearance-fields select, #readerPartSelect { color:var(--text-color); background:var(--card-bg); border:1px solid var(--border-color); padding:8px; border-radius:4px; }
+.reader-listen, .reader-part-progress, #readerAppearance { display:none; }
+.reader-audio-settings:not([open]) > :not(summary) { display:none; }
+body:not(.reader-preview) .reader-audio-settings > summary { display:none; }
+body:not(.reader-preview) .reader-audio-settings:not([open]) > :not(summary) { display:block; }
+/* details hides descendants natively; use an always-open legacy disclosure. */
+.reader-player { position:fixed; z-index:1200; bottom:0; left:0; right:0; display:grid; grid-template-columns:minmax(140px,1fr) auto minmax(220px,1fr); align-items:center; gap:8px 22px; padding:14px 28px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid var(--border-color); background:var(--card-bg); box-shadow:0 -3px 18px #00000012; }
+.reader-player-title { display:grid; gap:3px; min-width:0; }
+.reader-player-title strong { font:600 1.1rem var(--font-serif); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.reader-player-title span { font-size:.67rem; color:var(--text-light); }
+.reader-player-controls { display:flex; align-items:center; gap:8px; }
+.reader-player audio { width:100%; height:38px; }
+.reader-player-more { position:relative; font-size:.72rem; }
+.reader-player-more[open] { display:flex; }
+#readerPlayerStatus { grid-column:1/-1; font-size:.72rem; color:var(--secondary-color); }
+#readerPlayerStatus:empty { display:none; }
+.reader-has-player { padding-bottom:150px; }
+.reader-has-player .modal { padding-bottom:145px; }
+.reader-has-player .audio-time-remaining { display:none; }
+.reader-queue { position:relative; margin:24px auto 160px; max-width:1100px; padding:16px; border:1px solid var(--border-color); background:var(--card-bg); border-radius:8px; }
+.reader-queue-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:8px 0; font-size:.75rem; }
+.reader-queue-row > span { flex:1; min-width:180px; }
+.reader-generate-dialog { position:fixed; inset:0; margin:auto; max-width:540px; width:calc(100% - 32px); border:1px solid var(--border-color); border-radius:12px; padding:28px; color:var(--text-color); background:var(--card-bg); }
+.reader-generate-dialog::backdrop { background:#16221cb3; }
+.reader-generate-dialog h2 { font:600 2rem var(--font-serif); margin-bottom:12px; }
+.reader-generate-dialog p { font-size:.88rem; line-height:1.7; margin-bottom:22px; }
+.reader-generate-dialog > div { display:flex; flex-wrap:wrap; gap:10px; }
+.reader-generate-dialog button:first-child { background:var(--primary-color); color:var(--card-bg); }
+body :is(.reader-tools,.reader-player,.reader-part-progress,.reader-listen,.reader-shell-bar,.reader-generate-dialog) :focus-visible { outline:3px solid var(--secondary-color); outline-offset:3px; }
+/* Paper, ink, and muted green. Theme tokens also cover Library and Discuss. */
+.reader-preview { --bg-color:#f6f4ef; --card-bg:#fdfcf8; --primary-color:#263b32; --secondary-color:#4b634e; --text-color:#2e342f; --text-light:#606760; --border-color:#d8ddd3; --accent-color:#526a50; }
+.reader-preview[data-reader-theme='sepia'] { --bg-color:#eee4ce; --card-bg:#f7edd9; --primary-color:#4a3b2a; --secondary-color:#745535; --text-color:#403427; --text-light:#6a5943; --border-color:#cdbd9c; }
+.reader-preview[data-reader-theme='dark'] { --bg-color:#191e1b; --card-bg:#222924; --primary-color:#e1e7dc; --secondary-color:#afc7a5; --text-color:#dce3d7; --text-light:#b3bfb0; --border-color:#465144; --accent-color:#afc7a5; color-scheme:dark; }
+.reader-preview .header { padding:40px 0 28px; }
+.reader-preview .title { font-size:clamp(2.1rem,5vw,3.7rem); letter-spacing:-.025em; }
+.reader-preview .description { max-width:64ch; font-size:.88rem; }
+.reader-preview .modal { top:64px; height:calc(100dvh - 64px); padding:0; background:var(--bg-color); z-index:1000; }
+.reader-preview .modal-content { max-width:1500px; width:100%; height:100%; max-height:none; border-radius:0; box-shadow:none; animation:none; margin:auto; grid-template-rows:auto auto minmax(0,1fr); }
+.reader-preview.reader-has-player .modal { height:calc(100dvh - 64px - 120px - env(safe-area-inset-bottom)); }
+.reader-preview .modal-tabs { background:var(--bg-color); box-shadow:none; border-color:var(--border-color); padding:10px 64px 10px 24px; }
+.reader-preview .modal-tab { text-transform:none; letter-spacing:0; font-weight:500; }
+.reader-preview .modal-tab.is-active { box-shadow:none; background:var(--card-bg); border-bottom:2px solid var(--secondary-color); }
+.reader-preview .modal-poem-name { text-transform:none; letter-spacing:0; padding:8px 28px; }
+.reader-preview .modal-close { top:8px; color:var(--text-light); }
+.reader-preview .modal-body { padding:28px clamp(20px,5vw,72px) 80px; }
+.reader-preview .modal-title { max-width:var(--reader-width); margin:0 auto 24px; font:600 clamp(2rem,4vw,3rem)/1.18 var(--font-serif); color:var(--primary-color); }
+.reader-preview .modal-poem-content { max-width:var(--reader-width); margin:0 auto; font-size:var(--reader-size); line-height:var(--reader-leading); color:var(--text-color); }
+.reader-preview .modal-poem-content .poem-line { line-height:inherit; }
+.reader-preview .poem-audio { max-width:var(--reader-width); margin:0 auto 36px; background:transparent; border:0; padding:0 0 20px; border-bottom:1px solid var(--border-color); }
+.reader-preview .reader-listen { display:flex; align-items:center; gap:14px; font-size:.75rem; color:var(--text-light); }
+.reader-preview .reader-listen button { background:var(--primary-color); color:var(--card-bg); padding:10px 24px; }
+.reader-preview .reader-part-progress, .reader-preview #readerAppearance { display:block; }
+.reader-preview .reader-part-progress { margin:20px 0 8px; }
+.reader-part-heading { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:.72rem; }
+.reader-part-heading > strong { margin-right:auto; }
+.reader-parts { display:flex; gap:6px; overflow:auto; padding:12px 3px; scrollbar-width:thin; }
+.reader-part { flex-shrink:0; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-light); padding:8px 10px; border-radius:5px; font-size:.68rem; cursor:pointer; min-height:38px; }
+.reader-part[data-state='saved'] { border-bottom:3px solid var(--secondary-color); color:var(--primary-color); }
+.reader-part[data-state='failed'] { border-bottom:3px solid #b84835; }
+.reader-part[data-state='generating'], .reader-part[data-state='retrying'] { border-bottom:3px solid #ae8827; }
+.reader-part[aria-pressed='true'] { outline:2px solid var(--secondary-color); outline-offset:-2px; }
+#readerProgress { font-size:.75rem; color:var(--text-light); }
+.reader-generation-progress { margin:12px 0; padding:12px; border:1px solid var(--border-color); border-radius:6px; font-size:.8rem; overflow-wrap:anywhere; }
+.reader-generation-progress progress { display:block; width:100%; height:12px; margin:8px 0; accent-color:var(--primary-color); }
+.reader-generation-progress p { margin:0; color:var(--text-light); }
+.reader-generation-dots { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.reader-generation-dot { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; padding:0 3px; border-radius:50%; border:2px solid transparent; background:#5d6470; color:#fff; font:600 11px/1 var(--font-sans); }
+.reader-generation-dot[data-state='done'] { background:#257345; }
+.reader-generation-dot[data-state='generating'] { background:#205daa; border-color:#fff; outline:2px solid #205daa; }
+.reader-generation-dot[data-state='retrying'] { background:#8a5900; border-style:dashed; border-color:#ffe1a3; }
+.reader-generation-dot[data-state='failed'] { background:#b02c35; border-radius:5px; }
+.reader-generation-dot[data-state='unknown'], .reader-generation-dot[data-state='connecting'] { background:transparent; color:var(--text-color); border-color:var(--text-light); border-style:dotted; }
+.reader-generation-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin-bottom:10px; font-size:.72rem; }
+.reader-generation-legend span::before { content:''; display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; background:#5d6470; }
+.reader-generation-legend [data-state='done']::before { background:#257345; }
+.reader-generation-legend [data-state='generating']::before { background:#205daa; }
+.reader-generation-legend [data-state='retrying']::before { background:#8a5900; }
+.reader-generation-legend [data-state='failed']::before { background:#b02c35; border-radius:2px; }
+.reader-preview .reader-audio-settings { font-size:.8rem; }
+.reader-preview .reader-audio-settings[open] { margin-top:18px; }
+.reader-preview .poem-audio-title { font-size:1.2rem; }
+.reader-preview .poem-audio :is(select,button), .reader-preview :is(.search-input,.chat-input,.library-controls input,.library-controls select,.chat-history,.chat-message,.chat-header,.chat-form,.image-styles) { background:var(--card-bg); color:var(--text-color); border-color:var(--border-color); }
+.reader-preview .reader-listen button { background:var(--primary-color); color:var(--card-bg); }
+.reader-preview .chat-panel { background:var(--card-bg); border-color:var(--border-color); }
+.reader-preview .chat-title { color:var(--primary-color); }
+.reader-preview .reader-contents { display:block; max-width:980px; margin:auto; }
+.reader-contents-section { margin-bottom:38px; }
+.reader-contents-section h2 { font:600 1.6rem var(--font-serif); margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--border-color); }
+.reader-contents-section ol { list-style:none; }
+.reader-contents-section a { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:14px 10px; border-bottom:1px solid var(--border-color); color:var(--text-color); text-decoration:none; font:400 1.25rem var(--font-serif); }
+.reader-contents-section a:hover, .reader-contents-section a[aria-current] { background:var(--card-bg); color:var(--secondary-color); }
+.reader-bookmark { flex-shrink:0; font:500 .65rem var(--font-sans); color:var(--secondary-color); }
+@media (min-width:1100px) {
+    .reader-preview .modal-content[data-modal-tab='discuss'] .modal-layout { display:grid; grid-template-columns:minmax(0,3fr) minmax(360px,2fr); }
+    .reader-preview .modal-content[data-modal-tab='discuss'] .poem-panel { display:block; }
+    .reader-preview .modal-content[data-modal-tab='discuss'] .poem-images { display:none; }
+    .reader-preview .modal-content[data-modal-tab='discuss'] .chat-panel { height:100%; min-height:0; }
+    .reader-preview .modal-content[data-modal-tab='discuss'] .modal-body { padding-inline:28px; }
+    .reader-player-more { display:contents; }
+    .reader-player-more summary { display:none; }
+    .reader-player-more:not([open]) > :not(summary) { display:inline-block; }
+}
+@media (max-width:767px) {
+    .reader-shell-bar { padding:10px 16px; gap:8px; }
+    .reader-shell-bar > a { font-size:1.1rem; }
+    .reader-shell-bar > a span, .reader-shell-bar > div > a, .reader-preview-toggle small { display:none; }
+    .reader-player { padding:10px 16px calc(10px + env(safe-area-inset-bottom)); grid-template-columns:minmax(0,1fr) auto; gap:7px; }
+    .reader-player audio { grid-column:1/-1; height:32px; }
+    .reader-player-title strong { font-size:1rem; }
+    .reader-player-title span { font-size:.6rem; }
+    .reader-player-controls { gap:5px; }
+    .reader-player button { padding:7px; font-size:.65rem; min-height:36px; }
+    .reader-player-more[open] { position:absolute; bottom:100%; right:12px; padding:12px; border:1px solid var(--border-color); background:var(--card-bg); border-radius:8px; }
+    .reader-preview .modal { top:64px !important; height:calc(100dvh - 64px) !important; }
+    .reader-preview.reader-has-player .modal { height:calc(100dvh - 64px - 150px - env(safe-area-inset-bottom)) !important; }
+    .reader-preview .modal-content { height:100%; max-height:100%; grid-template-rows:auto auto minmax(0,1fr); }
+    .reader-preview .modal-tabs { position:relative; order:initial; padding:8px 48px 8px 8px; }
+    .reader-preview .modal-poem-name { display:block; padding:6px 16px; }
+    .reader-preview .modal-layout { order:initial; height:100%; }
+    .reader-preview .modal-body { padding:20px 18px 70px; }
+    .reader-preview .modal-poem-content { font-size:var(--reader-size); }
+    .reader-tools { gap:12px; }
+    .reader-entry-nav { width:100%; justify-content:space-between; }
+    .reader-tools-options { justify-content:space-between; width:100%; }
+    .reader-preview .reader-audio-settings .poem-audio-fields { grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion:reduce) { .reader-preview *, .reader-player * { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
+/* Keep the close action above the tab strip's stacking context. */
+.modal-close { z-index:30; }
+.reader-preview .header { background:transparent; color:var(--text-color); border-bottom:1px solid var(--border-color); border-radius:0; box-shadow:none; }
+.reader-preview .title { color:var(--primary-color); text-shadow:none; }
+.reader-preview :is(.subtitle,.description) { color:var(--text-light); opacity:1; }
+.reader-preview .book-switch { color:var(--secondary-color); }
+.reader-preview .book-switcher { background:var(--card-bg); border-color:var(--border-color); }
+.reader-preview :is(.recent-poem-link,.chat-suggestion,.chat-message-content,.chat-message-bubble,.chat-attachment,.chat-history-item,.chat-history-item button,.chat-response-listen,.image-key-setup,.image-steer,.image-style) { background:var(--card-bg); color:var(--text-color); border-color:var(--border-color); }
+.reader-preview :is(.chat-send,.random-poem:not(.random-poem--secondary)) { background:var(--primary-color); color:var(--card-bg); }
+.reader-preview .chat-toggle-track { background:var(--border-color); }
+.reader-preview .chat-toggle-input:checked + .chat-toggle-track { background:var(--secondary-color); }
+.reader-preview .random-poem--secondary { color:var(--secondary-color); background:var(--card-bg); }
+.reader-preview .chat-status[data-state='error'], .reader-preview .poem-audio-status[data-state='error'] { color:var(--secondary-color); }
+body { padding-top:64px; }
+.reader-shell-bar { position:fixed; top:0; left:0; right:0; }
+.reader-preview .chat-message-body { background:var(--bg-color); color:var(--text-color); }
+.reader-preview .chat-message--user .chat-message-body { background:var(--primary-color); color:var(--card-bg); }
+.reader-preview .modal, .reader-preview.reader-has-player .modal { height:calc(var(--reader-viewport,100dvh) - 64px - var(--reader-player-height,0px)) !important; padding:0; }
+@media (min-width:1100px) { .reader-preview .modal-content[data-modal-tab='discuss'] .modal-title { font-size:2.15rem; } }
+@media (max-width:767px) {
+    .reader-preview .modal-tabs { grid-row:1; min-height:54px; align-self:stretch; border-top:0; }
+    .reader-preview .modal-poem-name { grid-row:2; }
+    .reader-preview .modal-layout { grid-row:3; }
+}
+.reader-preview .reader-tools { position:sticky; top:0; z-index:12; background:var(--card-bg); padding-block:10px; }
+.reader-tools-options > .reader-preview-toggle:has([data-reader-preview]) { display:none; }
+.reader-part-progress > summary { font-size:.75rem; color:var(--secondary-color); cursor:pointer; padding-block:8px; }
+@media (max-width:767px) {
+    .reader-tools { flex-wrap:nowrap; gap:8px; margin-bottom:18px; }
+    .reader-entry-nav { width:auto; gap:6px; }
+    .reader-tools-options { width:auto; margin-left:auto; }
+    .reader-tools button { padding:8px; font-size:.68rem; }
+    .reader-tools #readerAppearance { font-size:.68rem; }
+    .reader-preview .modal-title { font-size:1.85rem; }
+    .reader-preview .reader-part-progress { margin-top:8px; }
+}
+.reader-queue-jump { padding:6px 9px; border:1px solid var(--border-color); border-radius:5px; background:var(--card-bg); color:var(--secondary-color); cursor:pointer; font:500 .7rem var(--font-sans); white-space:nowrap; }
+@media (max-width:767px) { .reader-shell-bar > div { gap:10px; } }
+.reader-hide-part-lines .narration-part-marker { display:none; }
+.reader-saved-recordings { display:grid; gap:10px; margin:16px 0; padding:14px; border:1px solid var(--border-color); border-radius:6px; font:500 .75rem/1.5 var(--font-sans); }
+.reader-saved-recordings p { margin:0; }
+.reader-saved-recordings label { display:grid; gap:6px; min-width:0; }
+.reader-saved-recordings select { width:100%; min-width:0; padding:8px; color:var(--text-color); background:var(--card-bg); }
+.reader-saved-recordings button { cursor:pointer; padding:8px 12px; border:1px solid var(--border-color); border-radius:5px; color:var(--primary-color); background:var(--card-bg); }
+.reader-saved-recordings button:disabled { opacity:.5; cursor:default; }
+.reader-find { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:8px 0; font:500 .75rem/1.4 var(--font-sans); }
+.reader-find input { flex:1; min-width:120px; padding:8px; color:var(--text-color); background:var(--card-bg); border:1px solid var(--border-color); border-radius:5px; }
+.reader-find button { padding:8px 10px; cursor:pointer; color:var(--primary-color); background:var(--card-bg); border:1px solid var(--border-color); border-radius:5px; }
+.reader-find button:disabled { opacity:.5; cursor:default; }
+.reader-find-match { color:#211900; background:#ffe396; }
+.reader-find-match.is-current { color:#211900; background:#ffb84d; outline:2px solid #805300; }
+.reader-playback-speed { display:inline-flex; align-items:center; gap:6px; font:500 .75rem var(--font-sans); }
+.reader-playback-speed select { padding:8px; border:1px solid var(--border-color); border-radius:5px; background:var(--card-bg); color:var(--primary-color); }
+#readerDuplicateVersions { max-height:180px; overflow:auto; padding-left:20px; margin:0 0 18px; font-size:.8rem; }

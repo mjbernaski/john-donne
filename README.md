@@ -16,13 +16,19 @@ collections from the same interface.
 - **A Shelf of Your Own**: Paste any poem into the Miscellaneous collection and it gains the same companion, images, and narration as the rest
 - **Beautiful UI**: Modern, responsive design with elegant typography
 - **Search Functionality**: Search poems by title or content
+- **Find in This Text**: Search the open chapter or poem, highlight matches, and navigate with previous/next or Enter/Shift+Enter. Command/Ctrl+F opens the in-text search while the reader is open.
+- **Shared Saved Recordings**: Play or download server-saved versions across voices and models from the reader's Saved recordings list. Open clients refresh every 15 seconds and on tab return. New recordings retain book, entry, voice, and model metadata; older recordings are discovered by their saved filenames. Audio held only in an older browser's storage is not uploaded by this feature.
+- **Duplicate Audio Warning**: Before generating a part or the remaining chapter, the reader checks shared recordings and warns if that entry already has audio. Choose saved recordings, cancel, or explicitly create another version. A failed library check also requires confirmation; exact saved parts play without regeneration.
+- **Playback Speed**: The player offers 0.8×, 0.9×, 1.0×, 1.2×, and 1.4×, remembers the choice in this browser, and adjusts remaining time accordingly.
+- **Narration Part Size**: Gemini narration uses at most 5,000 characters per part; existing smaller chapter limits and the local model's 5,000-character limit remain in effect. Previously saved versions remain accessible through Saved recordings.
+- **Shared Images**: Browser-generated images are copied from the image service into the shared library and refreshed across chapter views and the Images page. Open the original browser once to migrate its earlier image records; unavailable source images remain there for a later retry. Every output of a completed image job is retained.
 - **Modal View**: Read full poems in a clean, focused modal interface
 - **Per-Poem AI Chat**: Discuss each poem in a dedicated conversation with a local vLLM model
 - **Persistent Conversations**: Keep each poem's discussion and context across page reloads
 - **Visual Companions**: Generate a length-scaled set of FLUX illustrations for each poem
 - **Chosen Visual Styles**: Pick which of the 24 image styles the illustrations may use, or leave the choice open
 - **Image Steering**: Add a line of your own direction that every image prompt must follow
-- **Selectable Narration**: Choose fast local Chatterbox narration or expressive Gemini performances
+- **Selectable Narration**: Choose fast local Qwen3 narration or expressive Gemini performances
 - **Read Replies Aloud**: Have each companion answer narrated as it arrives
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
 
@@ -71,7 +77,9 @@ builds a switcher in the header from it. The configured collections are listed b
 | Shakespeare · Complete | `poems-shakespeare-complete.json` | Gutenberg ebook 100 — complete corpus arranged by sonnet, scene, and long poem |
 | The Complete Poetical Works of Percy Bysshe Shelley | `poems-shelley.json` | Hutchinson Oxford edition, 1914 — Gutenberg ebook 4800 — 312 entries |
 | The New England Mind: The Seventeenth Century | `poems-new-england-mind.json` | Macmillan first edition, 1939 — Internet Archive DLI scan — 19 entries |
+| The New England Mind: From Colony to Province | `poems-colony-to-province.json` | Harvard University Press, 1953 — supplied complete OCR PDF — 31 entries; page numbers, running headings, notes, and index excluded |
 | The Complete Sherlock Holmes | `poems-sherlock-holmes.json` | sherlock-holm.es — 56 short stories and 56 novel chapters across nine books |
+| Twenty Thousand Leagues under the Sea, by Jules Verne | `poems-twenty-thousand-leagues.json` | Gutenberg ebook 164 — 46 chapters across two parts |
 | Miscellaneous | none — browser storage | The reader, not a Gutenberg ebook — poems pasted in by hand |
 
 Choosing a collection swaps the poems, the page's titles and description, the
@@ -205,13 +213,18 @@ network interface. On this machine it is installed as the macOS launch agent
 if it exits. Its output is written to `~/Library/Logs/poetry-server.log` and
 `~/Library/Logs/poetry-server.error.log`.
 
-On this Mac, the agent runs through a locally signed **Poetry Server.app** so
-macOS can identify it when asking for Local Network access. An unsigned
-Homebrew Python can otherwise fail with `No route to host` without appearing
-in the permission list. Build and register the app before installing the agent:
+On this Mac, the agent runs through **Poetry Server.app** so macOS can identify
+it when asking for Local Network access. For reliable permission tracking, use
+an Apple-issued code-signing identity, as recommended by
+[Apple's local network privacy guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+The original ad hoc signature is not sufficient for reliable identity tracking.
+The builder now requires an Apple Development or Developer ID Application
+certificate and its private key in the keychain. Keep the same signing identity
+across builds. List available identities, then build and register the app:
 
 ```bash
-python3 launchd/build_poetry_app.py
+security find-identity -v -p codesigning
+python3 launchd/build_poetry_app.py --identity 'YOUR CERTIFICATE SHA-1'
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$PWD/launchd/Poetry Server.app"
 cp launchd/com.johndonne.poetry-server.plist ~/Library/LaunchAgents/
 ```
@@ -221,8 +234,14 @@ gui/$(id -u)/com.johndonne.poetry-server`, then use the bootstrap command below.
 Open Discuss and choose **Allow** on the **Poetry Server** Local Network prompt.
 The same permission can be enabled under System Settings → Privacy & Security
 → Local Network. Rebuild and register the app after upgrading Homebrew Python
-3.10, then reload the agent; macOS may request permission again. The generated
-app is ignored by Git and leaves the installed Python executable unchanged.
+3.10, then reload the agent; macOS may request permission again. Unchanged builds
+are skipped after signature verification. A replacement is signed and verified
+before installation; the previous bundle is retained as
+`launchd/Poetry Server.previous.app` for rollback. Archive that backup before
+another changed build. Missing certificates or signing failures leave the
+installed app untouched. Signing does not itself grant Local Network access.
+The generated app is ignored by Git and leaves the installed Python executable
+unchanged.
 
 Useful service commands:
 
@@ -262,7 +281,7 @@ address and port:
   "server": { "host": "0.0.0.0", "port": 8888 },
   "upstreams": {
     "flux": "http://192.168.6.40:2222",
-    "vllm": "http://192.168.5.40:8899",
+    "vllm": "http://192.168.5.40:8000",
     "vllm_fallback": "http://192.168.6.40:8080"
   }
 }
@@ -391,9 +410,9 @@ departs from the subject, so it can override the scene description the model
 wrote rather than merely adding to it. Like the style selection it is kept in
 browser storage, so it holds across reloads until it is cleared.
 
-Narration can use either the Chatterbox Turbo service configured by
-`upstreams.tts` in `config.json` (currently `http://192.168.5.46:7862`) or
-Gemini 3.8 Flash-Lite TTS, 3.8 Flash TTS, 3.1 Flash TTS, or 2.5 Flash Preview TTS. Local Chatterbox is the default and requires no cloud
+Narration can use either the Qwen3-TTS service configured by
+`upstreams.tts` in `config.json` (currently `http://mjbmini.local:7860`) or
+Gemini 3.8 Flash-Lite TTS, 3.8 Flash TTS, 3.1 Flash TTS, or 2.5 Flash Preview TTS. Local Qwen3 is the default and requires no cloud
 API key. The Gemini voice selector offers all 30 studio voices and remembers the
 selected reading voice in this browser. **Preview selected voice** reads the same
 short passage for each voice, shows an estimated cost, and reuses saved previews
@@ -409,7 +428,7 @@ standard paid-tier rate; audio is metered at 25 tokens per second. Cached
 readings are reused without another generation charge.
 
 Long works are divided in the browser into separately playable parts of roughly
-300 characters for local TTS or 1,800 for Gemini. Chunking prefers paragraph
+5,000 characters for local TTS or Gemini (with chapter overrides). Chunking prefers paragraph
 breaks, then sentence endings, then line or word breaks when a sentence exceeds
 the limit. Short parts keep their natural boundaries. Each part is generated and cached independently, so a failed
 request does not discard an entire chapter and a reader can resume later. A
@@ -611,3 +630,58 @@ python3 parse_sherlock_holmes.py /path/to/cano.html
 The importer validates the full 60-work canon and per-book entry counts before
 writing the output. Run `python3 -m unittest test_parse_sherlock_holmes.py` for
 collection integrity checks.
+
+### New reader preview
+
+Use **New reader · Preview** in the top navigation to try the literary layout.
+The choice is remembered in this browser and can be switched during playback.
+The preview includes grouped contents for chapter collections, previous/next
+entry navigation, remembered reading positions, desktop discussion beside the
+text, and Paper/Sepia/Dark appearance controls. Poetry keeps its existing line
+breaks. Audio settings and downloads are in a disclosure beneath **Listen**.
+
+Library and reader navigation now share one page shell in both presentations.
+The bottom player owns a frozen recording selection: browsing another text or
+changing the generation voice/model does not change what is playing. **Return
+to text** reopens that recording's entry. Saved parts advance automatically;
+a missing part stops playback instead of generating or skipping it. Reloading
+restores the recording paused. Auxiliary image/voice pages open in another tab.
+
+**Listen** plays saved audio or opens an explicit generation choice, with the
+selected voice and Gemini cost estimate. The numbered audio strip distinguishes
+saved, missing, queued, generating, retrying, failed, and unavailable checks.
+**Resume missing parts** reconnects/retries using the existing saved recordings.
+Generation tracking continues through in-app navigation. After a full reload or
+server restart, submit the same range to reconnect or resume from saved parts.
+
+`POST /api/tts/availability` accepts `{ "parts": [...] }` using the same request
+records as the narration queue. It returns `{ "parts": [{ "saved": true,
+"url": "/api/tts/audio/..." }, ...] }` in the submitted order; missing entries
+have `saved: false` and `url: null`. It validates 1–10,000 parts, reads file
+availability only, and does not read WAV bodies, invoke a provider, or require
+a Gemini key. Browser-only audio is merged into the client-side availability
+view. A failed check remains unknown rather than being labeled missing.
+
+Validation:
+
+```sh
+python3 -m unittest test_reader_availability.py
+# Requires Playwright and an installed Chromium browser. Uses a temporary
+# localhost server and mocked generation/chat; no paid requests are made.
+node test_reader_browser.cjs
+```
+
+For an existing Playwright installation, set `PLAYWRIGHT_MODULE` to its module
+path. `CHROMIUM_PATH` can select an already-installed Chromium executable.
+
+Local Qwen3 uses the OpenAI-compatible `/v1/audio/speech` endpoint with
+`http://192.168.6.38:7860` as a connection fallback. Override these with
+`TTS_BASE_URL` and `TTS_FALLBACK_URL`. Up to four independent local narration
+jobs/streams run concurrently; parts within each saved job stay ordered.
+Saved audio uses 24 kHz mono PCM converted to finalized WAV files. Qwen3
+recordings have a separate cache identity from older Chatterbox recordings.
+The reader and Voices page offer **Stream** and **Stop stream** for immediate
+PCM playback; streamed audio is not saved. Voices refresh discovers custom
+voices from `/v1/audio/voices`. Keep the application and TTS service on the LAN.
+
+Reimport the supplied Miller sequel with `python3 import_miller_pdf.py source-pdfs/The-New-England-Mind-Complete-OCR.pdf` (requires PyMuPDF). The importer uses the verified scan’s page geometry and chapter boundaries; it does not modify the first Miller collection.

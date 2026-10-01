@@ -18,6 +18,9 @@ def audio_response():
 class RecoveryTests(unittest.TestCase):
     def setUp(self):
         self.handler = object.__new__(server.PoetryRequestHandler)
+        pacing = patch.object(self.handler, '_pace_gemini_request')
+        pacing.start()
+        self.addCleanup(pacing.stop)
 
     def request(self):
         return self.handler._request_gemini_audio('secret', 'Gacrux', 'Read this.', 'gemini-3.1-flash-tts-preview')
@@ -36,7 +39,7 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(request.call_count, 2)
                 sleep.assert_called_once()
                 if isinstance(failure, HTTPError) and failure.code == 429:
-                    sleep.assert_called_with(7)
+                    sleep.assert_called_with(60)
                 stages = [call.kwargs['stage'] for call in progress.call_args_list]
                 self.assertEqual(stages, ['generating', 'retrying', 'generating'])
                 self.assertEqual(progress.call_args.kwargs['attempt'], 2)
@@ -48,6 +51,34 @@ class RecoveryTests(unittest.TestCase):
                 self.request()
             self.assertEqual(request.call_count, 4)
             self.assertEqual(sleep.call_count, 3)
+
+    def test_rate_limits_get_six_attempts_and_longer_backoff(self):
+        errors = [HTTPError('test', 429, 'limited', {}, io.BytesIO()) for _ in range(6)]
+        with patch.object(server, 'urlopen', side_effect=errors) as request, \
+             patch.object(server.time, 'sleep') as sleep:
+            with self.assertRaises(HTTPError):
+                self.request()
+        self.assertEqual(request.call_count, 6)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [60, 120, 240, 300, 300])
+
+    def test_retry_after_is_not_shortened(self):
+        error = HTTPError('test', 429, 'limited', {'Retry-After': '420'}, io.BytesIO())
+        with patch.object(server, 'urlopen', side_effect=[error, audio_response()]), \
+             patch.object(server.time, 'sleep') as sleep:
+            self.request()
+        sleep.assert_called_once_with(420)
+
+    def test_pacing_is_shared_between_handlers(self):
+        with patch.object(server, 'GEMINI_TTS_NEXT_REQUEST_AT', 0), \
+             patch.object(server.time, 'monotonic', side_effect=[100, 100, 104, 115]), \
+             patch.object(server.time, 'sleep') as sleep, \
+             patch.object(server.PoetryRequestHandler, '_tts_progress') as progress:
+            server.PoetryRequestHandler._pace_gemini_request(self.handler)
+            other = object.__new__(server.PoetryRequestHandler)
+            other._pace_gemini_request()
+            sleep.assert_called_once_with(11)
+            self.assertEqual(progress.call_args.kwargs['stage'], 'pacing')
+            self.assertEqual(server.GEMINI_TTS_NEXT_REQUEST_AT, 130)
 
     def test_permanent_errors_are_not_retried(self):
         for status in [400, 401, 403]:
@@ -66,7 +97,7 @@ class RecoveryTests(unittest.TestCase):
 
     def test_queue_continues_after_timeout_and_resume_reuses_saved_parts(self):
         job_id = 'recovery-test'
-        parts = [{'title': 'First', 'text': 'First'}, {'title': 'Second', 'text': 'Second'}]
+        parts = [dict(title=title, text=title, provider='gemini', voice='feminine') for title in ['First', 'Second']]
         saved = set()
 
         def render(part, key):

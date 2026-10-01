@@ -1,5 +1,7 @@
 __pycache__/
 launchd/Poetry Server.app/
+launchd/Poetry Server.previous.app/
+launchd/poetry-build-*/
 *.py[cod]
 .env
 *.log
@@ -16,3 +18,9 @@ poem-images/manifest.json.tmp
 voice-config.json
 voice-config.json.tmp
 voice-samples/*.tmp
+
+removed-recordings/
+
+perry-tts-progress.json
+
+chapter-v-fallback-progress.json

@@ -58,7 +58,10 @@
       "readingNotes": "Sensuous and controlled, with a dark elegance. Hold the long sentences together, let the imagery land without hurrying past it, and keep irony dry rather than theatrical. Preserve the tension between beauty and disgust that the poems live on. Pronounce French names and titles correctly.",
       "readingScene": "A shuttered nineteenth-century room, close and slightly airless, with warm dampened acoustics.",
       "readerProfile": "A seasoned reader of French poetry in English translation performing Baudelaire for an attentive, intimate audience.",
-      "category": "Poetry"
+      "category": "Poetry",
+      "geminiNarrationPartLimits": {
+        "THE BEACONS": 1800
+      }
     },
     {
       "id": "baudelaire-scott",
@@ -159,7 +162,11 @@
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A native Italian reader performing Dante's Inferno with the clarity of long familiarity, dramatic but unforced.",
       "category": "Poetry",
-      "narrativeIllustrations": true
+      "narrativeIllustrations": true,
+      "geminiNarrationPartLimits": {
+        "Inferno · Canto I": 1800,
+        "Inferno · Canto II": 1800
+      }
     },
     {
       "id": "dante-longfellow",
@@ -180,7 +187,11 @@
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A seasoned reader of Dante in English performing the Inferno for an attentive audience, dramatic but unforced.",
       "category": "Poetry",
-      "narrativeIllustrations": true
+      "narrativeIllustrations": true,
+      "geminiNarrationPartLimits": {
+        "Inferno · Canto I": 1800,
+        "Inferno · Canto II": 1800
+      }
     },
     {
       "id": "dante-cary",
@@ -201,7 +212,11 @@
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A seasoned reader of English Romantic verse performing Cary's Dante for an attentive audience.",
       "category": "Poetry",
-      "narrativeIllustrations": true
+      "narrativeIllustrations": true,
+      "geminiNarrationPartLimits": {
+        "Inferno · Canto I": 1800,
+        "Inferno · Canto II": 1800
+      }
     },
     {
       "id": "dante-norton",
@@ -222,10 +237,29 @@
       "readingScene": "A stone chamber with a cold, slightly hollow resonance around the voice.",
       "readerProfile": "A seasoned reader performing a prose Dante with clarity and restraint, telling it rather than declaiming it.",
       "category": "Poetry",
-      "narrativeIllustrations": true
+      "narrativeIllustrations": true,
+      "geminiNarrationPartLimits": {
+        "Inferno · Canto I": 1800,
+        "Inferno · Canto II": 1800
+      }
     },
     {
       "id": "new-england-mind",
+      "geminiNarrationPartLimits": {
+        "Chapter XIV · The Social Covenant": 5000,
+        "Foreword": 1800,
+        "Chapter I · The Augustinian Strain of Piety": 1800,
+        "Chapter III · The Intellectual Character": 1800,
+        "Chapter IV · The Intellectual Heritage": 1800,
+        "Chapter V · The Instrument of Reason": 1800,
+        "Chapter VI · Knowledge": 1800,
+        "Chapter VII · The Uses of Reason": 1800,
+        "Chapter VIII · Nature": 1800,
+        "Chapter IX · The Nature of Man": 1800,
+        "Chapter X · The Means of Conversion": 1800,
+        "Chapter XI · Rhetoric": 1800,
+        "Chapter XIII · The Covenant of Grace": 1800
+      },
       "name": "Perry Miller",
       "title": "The New England Mind: The Seventeenth Century",
       "subtitle": "Perry Miller's study of Puritan thought (1939)",
@@ -239,6 +273,26 @@
       "poet": "Perry Miller",
       "authorProfile": "Perry Miller (1905–1963) was an American historian of ideas whose work helped define the study of Puritanism and early New England intellectual culture. IMPORTANT: this is a scholarly prose monograph, not poetry. Treat each entry as a chapter or appendix in a sustained historical argument. Distinguish Miller's interpretation from the views of the seventeenth-century writers he quotes, and distinguish both from current historical consensus when relevant.",
       "sourceProfile": "The New England Mind: The Seventeenth Century (New York: The Macmillan Company, 1939), digitized by the Digital Library of India and made available at Internet Archive item in.ernet.dli.2015.228756, whose metadata marks the scan public domain. This collection was parsed from machine-generated OCR. Running heads and page numbers were removed and hard-wrapped prose was rejoined; occasional recognition errors may remain. It includes the foreword, sixteen chapters, and two appendices, but omits the index and the standalone endnotes because OCR detached the notes from the passages they annotate.",
+      "readingNotes": "Read as lucid scholarly prose: thoughtful, steady, and intellectually engaged. Follow the long argumentative sentences through their clauses without rushing. Shift lightly into quotation when Miller cites Puritan writers, but do not turn historical exposition into theatrical performance. Preserve unfamiliar theological and philosophical terms, and pronounce names carefully.",
+      "readingScene": "A quiet university library reading room with close, dry acoustics.",
+      "readerProfile": "A practiced reader of American intellectual history presenting Perry Miller's scholarly prose with clarity and measured authority.",
+      "category": "Nonfiction"
+    },
+    {
+      "id": "colony-to-province",
+      "name": "Perry Miller · From Colony to Province",
+      "title": "The New England Mind: From Colony to Province",
+      "subtitle": "Perry Miller’s sequel on Puritan New England (1953)",
+      "description": "Perry Miller traces the transformation of Puritan New England from colony to province. Includes the foreword, prologue, twenty-eight chapters in four books, and epilogue.",
+      "poems": "poems-colony-to-province.json",
+      "companionLabel": "Miller companion",
+      "chatContext": "Perry Miller · The New England Mind: From Colony to Province · Harvard University Press, 1953",
+      "sourceUrl": "source-pdfs/The-New-England-Mind-Complete-OCR.pdf",
+      "sourceNote": "The New England Mind: From Colony to Province, by Perry Miller (Harvard University Press, 1953), imported from the supplied complete OCR PDF",
+      "stripEditorialApparatus": false,
+      "poet": "Perry Miller",
+      "authorProfile": "Perry Miller (1905–1963) was an American historian of ideas whose work helped define the study of Puritanism and early New England intellectual culture. IMPORTANT: this is a scholarly prose monograph, not poetry. Treat each entry as a chapter or appendix in a sustained historical argument. Distinguish Miller's interpretation from the views of the seventeenth-century writers he quotes, and distinguish both from current historical consensus when relevant.",
+      "sourceProfile": "The New England Mind: From Colony to Province (Harvard University Press, 1953), by Perry Miller. Imported from the reader-supplied 530-page The-New-England-Mind-Complete-OCR.pdf. The reading text contains the foreword, prologue, twenty-eight chapters, and epilogue. Page numbers, running book and chapter headings, section-divider pages, and chapter-opening headings have been removed. Bibliographical notes and the index are omitted; footnotes are excluded from the reading text. Decorative opening words were checked against the page images and restored. Paragraphs were reconstructed from the page layout and line-end hyphenation rejoined. Other OCR recognition errors may remain; consult the linked source PDF for exact wording.",
       "readingNotes": "Read as lucid scholarly prose: thoughtful, steady, and intellectually engaged. Follow the long argumentative sentences through their clauses without rushing. Shift lightly into quotation when Miller cites Puritan writers, but do not turn historical exposition into theatrical performance. Preserve unfamiliar theological and philosophical terms, and pronounce names carefully.",
       "readingScene": "A quiet university library reading room with close, dry acoustics.",
       "readerProfile": "A practiced reader of American intellectual history presenting Perry Miller's scholarly prose with clarity and measured authority.",
@@ -311,6 +365,27 @@
       "readingNotes": "Read as narrative prose with clear, measured phrasing and natural paragraph pauses. Give Watson a warm, observant voice and Holmes precise, restrained dialogue. Build suspense without exaggeration, and pronounce Victorian names and places carefully.",
       "readingScene": "A quiet Victorian study with a fire and close, warm acoustics.",
       "readerProfile": "An attentive reader of British detective fiction, conveying wit, curiosity, and suspense with restraint."
+    },
+    {
+      "id": "twenty-thousand-leagues",
+      "name": "Twenty Thousand Leagues under the Sea",
+      "title": "Twenty Thousand Leagues under the Sea",
+      "poet": "Jules Verne",
+      "category": "Fiction",
+      "subtitle": "An undersea adventure in two parts",
+      "description": "Professor Aronnax, Conseil, and Ned Land voyage aboard Captain Nemo’s Nautilus. Jules Verne’s novel is arranged as 46 chapters across two parts.",
+      "poems": "poems-twenty-thousand-leagues.json",
+      "chapterCollection": true,
+      "companionLabel": "Verne companion",
+      "chatContext": "Jules Verne · Twenty Thousand Leagues under the Sea · Project Gutenberg",
+      "sourceUrl": "https://www.gutenberg.org/cache/epub/164/pg164-images.html",
+      "sourceNote": "Twenty Thousand Leagues under the Sea, by Jules Verne. English text from Project Gutenberg ebook 164.",
+      "stripEditorialApparatus": false,
+      "authorProfile": "Jules Verne (1828–1905), French novelist. This is narrative prose in English translation. Discuss exploration, marine life, technology, characterization, and the tensions between freedom and captivity. Distinguish the translation’s wording from Verne’s French and the novel’s scientific claims from present knowledge. Avoid spoilers beyond the selected chapter unless requested.",
+      "sourceProfile": "Project Gutenberg ebook 164, English HTML edition. All 46 narrative chapters are retained in two parts with paragraph divisions and links to the source chapters. Contents, illustration lists, images and their captions, and Gutenberg boilerplate are omitted from the reading text. The source link includes the original illustrations. The supplied edition does not identify its translator.",
+      "readingNotes": "Read as adventurous narrative prose, with clear phrasing and natural paragraph pauses. Convey Aronnax’s scientific curiosity, Ned Land’s impatience, and Captain Nemo’s reserve without exaggerated accents. Pronounce French names carefully.",
+      "readingScene": "A quiet cabin aboard a submarine, with close, warm acoustics.",
+      "readerProfile": "An attentive reader of classic adventure fiction, conveying curiosity and suspense with restraint."
     }
   ],
   "externalBooks": []

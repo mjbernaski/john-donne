@@ -11,6 +11,29 @@ import server
 
 
 class QueueTests(unittest.TestCase):
+    def test_local_batch_runs_concurrently_and_tracks_out_of_order_parts(self):
+        handler = object.__new__(server.PoetryRequestHandler)
+        job_id = 'parallel-test'
+        barrier = threading.Barrier(4)
+        last_done = threading.Event()
+        def render(worker, payload, key):
+            barrier.wait(timeout=3)
+            if payload['text'] != '3':
+                self.assertTrue(last_done.wait(3))
+            else:
+                last_done.set()
+            return b'wav', '/saved.wav', payload['text'] == '2'
+        parts = [dict(title='Parallel test', text=str(i), voice='feminine', provider='local') for i in range(4)]
+        server.TTS_JOBS[job_id] = dict(state='queued', completed=0, reused=0)
+        try:
+            with patch.object(server.PoetryRequestHandler, '_render_tts', render):
+                handler._run_tts_job(job_id, parts, '')
+            job = server.TTS_JOBS[job_id]
+            self.assertEqual((job['state'], job['completed'], job['reused']), ('done', 4, 1))
+            self.assertEqual([p['stage'] for p in job['partProgress']], ['done'] * 4)
+        finally:
+            del server.TTS_JOBS[job_id]
+
     def test_disconnected_client_duplicate_submission_and_failure(self):
         entered, release = threading.Event(), threading.Event()
         calls = []
@@ -47,7 +70,7 @@ class QueueTests(unittest.TestCase):
                 time.sleep(.01)
             self.fail('Queue did not finish')
         try:
-            with patch.object(server.PoetryRequestHandler, '_render_tts', render):
+            with patch.object(server, 'LOCAL_TTS_BATCH_WORKERS', 1), patch.object(server.PoetryRequestHandler, '_render_tts', render):
                 job = submit(['first', 'cached', 'last'])
                 self.assertTrue(entered.wait(1))
                 self.assertEqual(submit(['first', 'cached', 'last'])['id'], job['id'])
@@ -60,6 +83,18 @@ class QueueTests(unittest.TestCase):
                 self.assertEqual(failed['state'], 'failed')
                 self.assertNotIn('must-not-run', calls)
                 self.assertNotIn('secret-provider-detail', json.dumps(failed))
+                entered.clear()
+                release.clear()
+                stopped = submit(['finish-current', 'never-generate'])
+                self.assertTrue(entered.wait(1))
+                with urlopen(Request(base + '/api/tts/jobs/' + stopped['id'] + '/cancel', data=b'', method='POST')) as response:
+                    self.assertTrue(json.load(response)['stopRequested'])
+                release.set()
+                result = finished(stopped)
+                self.assertEqual(result['state'], 'failed')
+                self.assertEqual(result['completed'], 1)
+                self.assertNotIn('never-generate', calls)
+                self.assertIn('Saved parts are kept', result['error'])
         finally:
             release.set()
             httpd.shutdown()

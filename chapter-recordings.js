@@ -3,17 +3,30 @@
     const panel = document.getElementById('chapterRecordingPanel');
     const status = document.getElementById('chapterRecordingStatus');
     const selector = document.getElementById('chapterRecordingPart');
-    const player = document.getElementById('chapterRecordingPlayer');
+    const play = document.getElementById('chapterRecordingPlay');
     const download = document.getElementById('chapterRecordingDownload');
+    const stop = document.getElementById('chapterRecordingStop');
+    let activeJob = null;
+    stop.addEventListener('click', async () => {
+        if (!activeJob) return;
+        stop.disabled = true;
+        try {
+            const response = await fetch(`/api/tts/jobs/${encodeURIComponent(activeJob)}/cancel`, { method: 'POST' });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Could not stop narration.');
+            status.textContent = 'Stop requested. The current request may finish; saved parts will be kept.';
+        } catch (error) {
+            status.textContent = error.message;
+            stop.disabled = false;
+        }
+    });
     let chapterId = '', lastCheck = 0, pending = false, optionsSignature = '';
 
-    function selectAudio() {
-        if (selector.value && player.getAttribute('src') !== selector.value) {
-            player.pause();
-            player.src = selector.value;
-        }
-        player.hidden = !selector.value;
-    }
+    function selectAudio() { play.disabled = !selector.value; }
+    play.addEventListener('click', () => {
+        const urls = [...selector.options].filter(option => option.textContent.startsWith('Part ')).map(option => option.value);
+        window.Reader?.playExternal(selector.value, 'Saved chapter recording', urls.includes(selector.value) ? urls : null);
+    });
 
     window.refreshChapterRecording = async () => {
         const chapter = currentPoem?.title.match(/^Chapter ([IVXLCDM]+)\s*[·:]/)?.[1];
@@ -23,11 +36,11 @@
             lastCheck = 0;
             optionsSignature = '';
             panel.hidden = true;
-            player.pause();
-            player.removeAttribute('src');
-            player.load();
+            play.disabled = true;
             selector.replaceChildren();
             download.hidden = true;
+            stop.hidden = true;
+            activeJob = null;
         }
         if (!id || pending || Date.now() - lastCheck < 5000) return;
         pending = true;
@@ -39,6 +52,8 @@
             if (id !== chapterId || recording.chapter !== currentPoem?.title) return;
             panel.hidden = false;
             const ready = recording.state === 'complete';
+            activeJob = ['queued', 'running'].includes(recording.state) ? recording.job : null;
+            stop.hidden = !activeJob;
             status.textContent = `${recording.label} · ${recording.saved} of ${recording.total} parts saved · `
                 + (ready ? 'Complete chapter ready.' : recording.state === 'stopped'
                     ? `Stopped: ${recording.error}` : 'Generating remaining parts. You can leave this page.');
@@ -47,10 +62,9 @@
             const signature = JSON.stringify(choices);
             if (signature !== optionsSignature) {
                 const selected = selector.value;
-                const wasPlaying = !player.paused;
                 selector.replaceChildren(...choices.map(choice => new Option(choice.text, choice.url)));
                 // Preserve ongoing playback when newly saved parts arrive.
-                if (choices.some(choice => choice.url === selected) && (wasPlaying || !ready)) selector.value = selected;
+                if (choices.some(choice => choice.url === selected)) selector.value = selected;
                 optionsSignature = signature;
                 selectAudio();
             }
@@ -69,6 +83,5 @@
     selector.addEventListener('change', selectAudio);
     setInterval(() => {
         if (document.getElementById('poemModal')?.classList.contains('show')) window.refreshChapterRecording();
-        else player.pause();
     }, 15000);
 })();
