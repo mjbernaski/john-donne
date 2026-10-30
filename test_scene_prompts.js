@@ -35,6 +35,16 @@ for (const [start, end] of [
 }
 
 async function run() {
+    const stylePool = ['Oil painting', 'Watercolor', 'Charcoal'].map(label => ({ label, prompt: label + '.' }));
+    context.Math = Object.create(Math);
+    context.Math.random = () => 0;
+    const shuffled = context.shuffleImageStyles(stylePool);
+    assert.deepEqual(Array.from(shuffled, s => s.label), ['Watercolor', 'Charcoal', 'Oil painting']);
+    assert.deepEqual(stylePool.map(s => s.label), ['Oil painting', 'Watercolor', 'Charcoal'], 'Selection order is preserved');
+    const uniqueBatch = context.getImagePrompts(chapter, ['Scene one', 'Scene two', 'Scene three', 'Scene four'], 17, stylePool, '');
+    assert.equal(uniqueBatch.length, 3, 'Batches stop at the available distinct styles');
+    assert.equal(new Set(uniqueBatch.map(image => image.style)).size, 3, 'A batch never repeats a style');
+    delete context.Math;
     const source = context.getSceneSource(chapter);
     assert.equal(source.text, chapter.content.replace(/\s+/g, ' ').trim());
     assert(source.text.length > 1400);
@@ -133,7 +143,7 @@ async function run() {
             currentBook: book, currentPoem: chapter, currentChatSession: session,
             generateImages: { disabled: false }, stopImages: { hidden: true, disabled: false }, console: { warn() {} },
             getFluxStatus: async () => ({}), getPoemImageCount: () => 3,
-            getSelectedStyles: () => [{ label: 'Oil painting', prompt: 'Oil painting.' }],
+            getSelectedStyles: () => ['Oil painting', 'Watercolor', 'Charcoal'].map(label => ({label, prompt: label + '.'})),
             getSteerText: () => '', setPoemImagesStatus: () => {},
             renderPoemImages: () => {}, savePoemSession: () => {}, pollPoemImageJobs: () => {},
             describePoemScene: async () => {

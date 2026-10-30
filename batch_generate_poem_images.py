@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import random
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -109,7 +110,7 @@ def describe(poem: dict, poet: str) -> str:
 
 
 def make_prompt(scene: str, index: int) -> tuple[str, str]:
-    label, style = STYLES[index % len(STYLES)]
+    label, style = random.choice(STYLES)
     # The wardrobe and pairing are stated affirmatively and while the figures are
     # still the active subject. FLUX reads the prompt through T5, which has no
     # operator for "no", so a prohibition tends to summon what it forbids; the

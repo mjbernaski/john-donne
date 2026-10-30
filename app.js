@@ -2434,16 +2434,17 @@ function restoreImageBatchCount() {
 
 function getPoemImageCount(poem) {
     const selected = Number(imageBatchCount.value);
-    if (Number.isInteger(selected) && selected >= 1 && selected <= 10) return selected;
+    const available = getSelectedStyles().length;
+    if (Number.isInteger(selected) && selected >= 1 && selected <= 10) return Math.min(selected, available);
     const lineCount = cleanPoemContent(poem.content, poem.title)
         .replace(/\n{2,}/g, '\n')
         .split('\n')
         .filter(line => line.trim()).length;
-    if (lineCount <= 12) return 1;
-    if (lineCount <= 30) return 2;
-    if (lineCount <= 60) return 3;
-    if (lineCount <= 120) return 4;
-    return 5;
+    if (lineCount <= 12) return Math.min(1, available);
+    if (lineCount <= 30) return Math.min(2, available);
+    if (lineCount <= 60) return Math.min(3, available);
+    if (lineCount <= 120) return Math.min(4, available);
+    return Math.min(5, available);
 }
 
 function getSavedImageScene(image) {
@@ -2853,7 +2854,7 @@ function saveSteerText() {
     }
 }
 
-// An empty selection means every style, cycled in order across a poem's images.
+// An empty selection makes every style available for random selection.
 function getSelectedStyles() {
     const chosen = VISUAL_STYLES.filter(style => selectedStyleLabels.has(style.label));
     return chosen.length ? chosen : VISUAL_STYLES;
@@ -2921,18 +2922,15 @@ function updateStyleSummary() {
     clearImageStyles.hidden = chosen === 0;
 
     if (!chosen) {
-        imageStylesSummary.textContent = `Cycling through all ${VISUAL_STYLES.length} styles. Pick one or more to choose for yourself.`;
+        imageStylesSummary.textContent = `Randomly choosing from all ${VISUAL_STYLES.length} styles, with no repeats per batch. Pick styles to narrow the selection.`;
         return;
     }
     if (!planned) {
         imageStylesSummary.textContent = `${chosen} style${chosen === 1 ? '' : 's'} selected.`;
         return;
     }
-    // Fewer styles than images means the selection repeats; more means only the first are reached.
-    const used = Math.min(chosen, planned);
-    const note = chosen < planned
-        ? ` They repeat across the ${planned} images.`
-        : (chosen > planned ? ` This batch uses ${planned} images, so the first ${used} styles are used.` : '');
+    // Every batch samples the selected styles without replacement.
+    const note = ` Each batch randomly chooses up to ${Math.min(chosen, planned)} distinct style${Math.min(chosen, planned) === 1 ? '' : 's'}.`;
     imageStylesSummary.textContent = `${chosen} style${chosen === 1 ? '' : 's'} selected.${note}`;
 }
 
@@ -2960,6 +2958,15 @@ const CHAPTER_IMAGE_DIRECTIONS = [
     'Choose a further moment or a close view of an action explicitly described in this passage.'
 ];
 
+function shuffleImageStyles(styles) {
+    const shuffled = [...styles];
+    for (let index = shuffled.length - 1; index > 0; index--) {
+        const other = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[other]] = [shuffled[other], shuffled[index]];
+    }
+    return shuffled;
+}
+
 function getImageDirection(index) {
     const directions = currentBook.userPoems ? TEXT_IMAGE_DIRECTIONS : usesNarrativeImages() ? CHAPTER_IMAGE_DIRECTIONS : IMAGE_DIRECTIONS;
     return directions[index % directions.length];
@@ -2967,9 +2974,10 @@ function getImageDirection(index) {
 
 function getImagePrompts(poem, scenes, variationOffset = 0, styles = getSelectedStyles(), steer = getSteerText()) {
     const nameLabels = typeof imageNameLabels !== 'undefined' && imageNameLabels.checked;
-    return scenes.map((scene, index) => {
+    const randomizedStyles = shuffleImageStyles(styles);
+    return scenes.slice(0, randomizedStyles.length).map((scene, index) => {
         const variationIndex = variationOffset + index;
-        const style = styles[variationIndex % styles.length];
+        const style = randomizedStyles[index];
         const chapter = Boolean(usesNarrativeImages());
         const direction = getImageDirection(variationIndex);
         return {
@@ -3501,10 +3509,10 @@ async function generatePoemImageSet(options = {}) {
     stopImages.disabled = false;
     setPoemImagesStatus('Connecting to the image service…', 'working');
 
-    const count = options.count === 1 ? 1 : getPoemImageCount(poem);
+    const styles = shuffleImageStyles(getSelectedStyles());
+    const count = Math.min(options.count === 1 ? 1 : getPoemImageCount(poem), styles.length);
     session.imagePlanningTotal = count;
     const variationOffset = session.images.length;
-    const styles = getSelectedStyles();
     const steer = getSteerText();
     const previousScenes = getPreviousImageScenes(session.images);
     const sceneMode = usesNarrativeImages() ? 'chapter-scene-v1' : 'poetic-interpretation';
@@ -3521,7 +3529,7 @@ async function generatePoemImageSet(options = {}) {
             const scene = await describePoemScene(poem, direction, steer, previousScenes);
             if (!isCurrent() || session.imageStopRequested) return;
 
-            const [prompt] = getImagePrompts(poem, [scene], variationOffset + index, styles, steer);
+            const [prompt] = getImagePrompts(poem, [scene], variationOffset + index, [styles[index]], steer);
             const image = { ...prompt, sceneMode, status: 'queued', jobId: null, filename: null };
             newImages.push(image);
             session.images.push(image);
