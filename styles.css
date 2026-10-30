@@ -1434,66 +1434,115 @@ body {
     outline-offset: 2px;
 }
 
+.image-style-browser {
+    margin-top: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--card-bg, white);
+    padding: 13px;
+}
+.image-style-browser > summary {
+    cursor: pointer;
+    color: var(--text-color);
+    font: 600 0.8rem var(--font-sans);
+    line-height: 1.6;
+}
+.image-style-browser > summary span {
+    display: block;
+    margin-left: 16px;
+    color: var(--text-light);
+    font-size: 0.68rem;
+    font-weight: 400;
+}
+.image-style-search-label {
+    display: block;
+    margin: 15px 0 5px;
+    color: var(--text-light);
+    font: 600 0.68rem var(--font-sans);
+}
+.image-style-search {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font: 0.75rem var(--font-sans);
+}
+.image-style-categories { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.image-style-categories button, .image-selected-style {
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 7px 10px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    font: 500 0.68rem var(--font-sans);
+}
+.image-style-categories button[aria-pressed="true"] {
+    background: var(--secondary-color);
+    border-color: var(--secondary-color);
+    color: white;
+}
+.image-selected-styles { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.image-selected-styles[hidden] { display: none; }
+.image-selected-style { border-color: var(--secondary-color); color: var(--secondary-color); }
+.image-selected-style:hover { text-decoration: line-through; }
+.image-style-results { margin-bottom: 10px; color: var(--text-light); font: 0.67rem/1.6 var(--font-sans); }
 .image-styles-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-height: 132px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+    gap: 8px;
+    max-height: 350px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 2px 4px 2px 2px;
+    scrollbar-width: thin;
+    padding: 3px;
 }
-
-.image-styles-options::-webkit-scrollbar {
-    width: 6px;
-}
-
-.image-styles-options::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.image-styles-options::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 3px;
-}
-
-.image-styles-options::-webkit-scrollbar-thumb:hover {
-    background: #baa994;
-}
-
 .image-style {
-    padding: 5px 10px;
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px 1fr 17px;
+    grid-template-rows: auto 1fr;
+    column-gap: 9px;
+    row-gap: 5px;
+    align-items: start;
+    min-height: 100px;
+    padding: 12px;
     border: 1px solid var(--border-color);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.76);
-    color: var(--text-light);
+    border-radius: 9px;
+    background: var(--bg-color);
+    color: var(--text-color);
     cursor: pointer;
-    font-family: var(--font-sans);
-    font-size: 0.68rem;
-    font-weight: 500;
-    line-height: 1.3;
-    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    text-align: left;
+    font: 500 0.74rem/1.35 var(--font-sans);
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
-
-.image-style:hover {
-    border-color: #baa994;
-    background: white;
-    color: var(--secondary-color);
+.image-style:hover { border-color: var(--secondary-color); box-shadow: 0 2px 8px #0000000a; }
+.image-style-badge {
+    grid-row: 1 / 3;
+    display: grid;
+    place-items: center;
+    height: 34px;
+    border-radius: 8px;
+    background: #e8e1d4;
+    color: #6d5337;
+    font: 600 15px Georgia, serif;
 }
-
-.image-style:focus-visible {
-    outline: 3px solid rgba(212, 175, 55, 0.48);
-    outline-offset: 2px;
-}
-
-/* Selected chips carry weight and a filled border so they read in greyscale. */
-.image-style--selected,
-.image-style--selected:hover {
+.image-style[data-category="TV & animation"] .image-style-badge { background: #e4dff3; color: #5c4586; font: 700 11px var(--font-sans); }
+.image-style[data-category="Artists"] .image-style-badge { background: #dce8df; color: #355e45; }
+.image-style-title { align-self: center; overflow-wrap: anywhere; }
+.image-style-description { grid-column: 2; color: var(--text-light); font-size: 0.64rem; font-weight: 400; line-height: 1.5; }
+.image-style-check { grid-column: 3; grid-row: 1; text-align: center; font-size: 14px; color: var(--text-light); }
+.image-style--selected, .image-style--selected:hover {
     border-color: var(--secondary-color);
-    background: var(--secondary-color);
-    color: white;
-    font-weight: 700;
+    box-shadow: inset 0 0 0 1px var(--secondary-color);
 }
+.image-style--selected .image-style-check { color: var(--secondary-color); font-weight: 700; }
+.image-style:focus-visible, .image-selected-style:focus-visible,
+.image-style-categories button:focus-visible, .image-style-browser summary:focus-visible,
+.image-style-search:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 2px; }
 
 .image-steer-label {
     display: block;
@@ -2819,15 +2868,9 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .image-styles-options {
-        max-height: 118px;
-        gap: 5px;
-    }
-
-    .image-style {
-        padding: 5px 9px;
-        font-size: 0.65rem;
-    }
+    .image-styles-options { max-height: 320px; grid-template-columns: 1fr; }
+    .image-style { min-height: 78px; }
+    .image-style-browser > summary span { font-size: 0.64rem; }
 
     .poem-audio-heading {
         grid-template-columns: 1fr;

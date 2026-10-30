@@ -26,7 +26,7 @@ collections from the same interface.
 - **Per-Poem AI Chat**: Discuss each poem in a dedicated conversation with a local vLLM model
 - **Persistent Conversations**: Keep each poem's discussion and context across page reloads
 - **Visual Companions**: Generate a length-scaled set of FLUX illustrations for each poem
-- **Chosen Visual Styles**: Pick from 37 image styles, including artist-inspired treatments and Scooby Doo, or leave the choice open. Each batch randomly samples styles without repeats; its size is limited to the number of available styles
+- **Chosen Visual Styles**: Pick from 47 image styles, including artist-inspired treatments and 11 TV animation styles, or leave the choice open. Browse searchable TV & animation, Artists, and Techniques categories; select style cards and remove choices from the visible style mix. Each batch randomly samples styles without repeats; its size is limited to the number of available styles
 - **Image Steering**: Add a line of your own direction that every image prompt must follow
 - **Selectable Narration**: Choose fast local Qwen3 narration or expressive Gemini performances
 - **Read Replies Aloud**: Have each companion answer narrated as it arrives

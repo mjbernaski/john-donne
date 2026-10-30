@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Poems of John Donne</title>
-    <link rel="stylesheet" href="styles.css?v=20261030-label-status">
+    <link rel="stylesheet" href="styles.css?v=20261030-style-browser">
     <link rel="stylesheet" href="library.css">
     <link rel="stylesheet" href="reader.css?v=20261030-playback-time">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -183,11 +183,24 @@
                                 </div>
                                 <div class="image-styles">
                                     <div class="image-styles-header">
-                                        <p class="image-styles-eyebrow">Visual style</p>
-                                        <button id="clearImageStyles" class="image-styles-clear" type="button">Use every style</button>
+                                        <p class="image-styles-eyebrow">Your style mix</p>
+                                        <button id="clearImageStyles" class="image-styles-clear" type="button">Reset to all styles</button>
                                     </div>
-                                    <div id="imageStyleOptions" class="image-styles-options" role="group" aria-label="Visual styles"></div>
-                                    <p id="imageStylesSummary" class="image-styles-summary"></p>
+                                    <p id="imageStylesSummary" class="image-styles-summary" role="status" aria-live="polite"></p>
+                                    <div id="imageSelectedStyles" class="image-selected-styles" role="group" aria-label="Selected styles"></div>
+                                    <details class="image-style-browser" open>
+                                        <summary>Browse &amp; choose styles <span>Choose one or mix a few</span></summary>
+                                        <label class="image-style-search-label" for="imageStyleSearch">Find a style</label>
+                                        <input id="imageStyleSearch" class="image-style-search" type="search" placeholder="Search shows, artists, or techniques…" autocomplete="off" aria-controls="imageStyleOptions">
+                                        <div id="imageStyleCategories" class="image-style-categories" role="group" aria-label="Filter styles by category">
+                                            <button type="button" data-style-category="All" aria-pressed="true">All styles</button>
+                                            <button type="button" data-style-category="TV &amp; animation" aria-pressed="false">TV &amp; animation</button>
+                                            <button type="button" data-style-category="Artists" aria-pressed="false">Artists</button>
+                                            <button type="button" data-style-category="Techniques" aria-pressed="false">Techniques</button>
+                                        </div>
+                                        <p id="imageStyleResults" class="image-style-results" role="status" aria-live="polite"></p>
+                                        <div id="imageStyleOptions" class="image-styles-options" role="group" aria-label="Available visual styles"></div>
+                                    </details>
                                     <label class="image-steer-label" for="imageSteer">Steer the images</label>
                                     <textarea
                                         id="imageSteer"
@@ -372,7 +385,7 @@
     </div>
 
     <script src="shared-images.js?v=20261030-label-status"></script>
-    <script src="app.js?v=20261030-random-styles"></script>
+    <script src="app.js?v=20261030-style-browser"></script>
     <script src="streaming-tts.js?v=20261030-playback-time"></script>
     <script src="character-performance.js?v=20261025-goethe-performance"></script>
     <script src="reader.js?v=20261030-playback-time"></script>

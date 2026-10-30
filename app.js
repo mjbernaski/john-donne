@@ -121,6 +121,11 @@ const imageApiKey = document.getElementById('imageApiKey');
 const saveImageApiKey = document.getElementById('saveImageApiKey');
 const imageSteer = document.getElementById('imageSteer');
 const imageStyleOptions = document.getElementById('imageStyleOptions');
+const imageStyleSearch = document.getElementById('imageStyleSearch');
+const imageStyleCategories = document.getElementById('imageStyleCategories');
+const imageStyleResults = document.getElementById('imageStyleResults');
+const imageSelectedStyles = document.getElementById('imageSelectedStyles');
+let activeStyleCategory = 'All';
 const imageStylesSummary = document.getElementById('imageStylesSummary');
 const clearImageStyles = document.getElementById('clearImageStyles');
 const poemImagesStatus = document.getElementById('poemImagesStatus');
@@ -2778,6 +2783,8 @@ const VISUAL_STYLES = [
     },
     {
         label: 'Scooby Doo',
+        category: 'TV & animation',
+        description: 'Mystery atmosphere · Vintage cels',
         prompt: 'Classic Scooby-Doo Saturday-morning animation style: hand-drawn 2D animation cels, bold clean outlines, flat cel shading, expressive faces and poses, elongated cartoon proportions, and richly painted backgrounds in eerie teal, violet, and warm orange. Playful spooky mystery atmosphere with theatrical shadows. Depict the specified literary characters in their own period clothing and setting using this cartoon treatment.'
     },
     {
@@ -2827,6 +2834,66 @@ const VISUAL_STYLES = [
     {
         label: "Edward Hopper",
         prompt: "Oil painting in the style of Edward Hopper, with strong architectural geometry, spare composition, raking sunlight or isolated practical light, crisp shadow shapes, restrained color, and quietly expressive figures. Preserve the specified era and setting while conveying emotional distance through spacing and light."
+    },
+    {
+        "label": "The Simpsons",
+        "category": "TV & animation",
+        "description": "Bold outlines \u00b7 Sunny colors",
+        "prompt": "The Simpsons television animation style, with clean heavy outlines, flat bright colors, rounded cartoon anatomy, large expressive eyes, simplified faces, and a warmly satirical suburban-animation sensibility. Preserve the specified literary characters, their period clothing, the setting, and the actual scene; apply the visual treatment to those characters."
+    },
+    {
+        "label": "The Flintstones",
+        "category": "TV & animation",
+        "description": "Stone-age curves \u00b7 Painted scenery",
+        "prompt": "The Flintstones television animation style, with chunky rounded silhouettes, broad expressive faces, thick ink outlines, flat warm cel colors, and hand-painted mid-century cartoon backgrounds. Preserve the specified literary characters, clothing, objects, setting, and action while rendering them with this playful visual language."
+    },
+    {
+        "label": "The Jetsons",
+        "category": "TV & animation",
+        "description": "Space-age shapes \u00b7 Pastel color",
+        "prompt": "The Jetsons television animation style, with elegant angular silhouettes, streamlined curves, clean ink outlines, flat pastel cel colors, and cheerful space-age graphic design. Preserve the specified literary scene and its era, characters, and objects while translating their shapes into this retro cartoon treatment."
+    },
+    {
+        "label": "Looney Tunes",
+        "category": "TV & animation",
+        "description": "Elastic poses \u00b7 Comic energy",
+        "prompt": "Classic Looney Tunes animation style, with expressive elastic poses, strong silhouettes, confident ink contours, saturated cel colors, exaggerated facial acting, and richly painted theatrical backgrounds. Keep the specified literary cast, relationships, clothing, and action recognizable within the energetic cartoon staging."
+    },
+    {
+        "label": "Batman: The Animated Series",
+        "category": "TV & animation",
+        "description": "Noir shadows \u00b7 Art Deco",
+        "prompt": "Batman: The Animated Series television animation style, with bold angular character designs, spare sculptural contours, strong black silhouettes, dramatic noir lighting, restrained jewel colors, and Art Deco graphic composition over dark painted backgrounds. Preserve the specified literary cast and setting in this cinematic visual treatment."
+    },
+    {
+        "label": "Samurai Jack",
+        "category": "TV & animation",
+        "description": "Graphic silhouettes \u00b7 Quiet space",
+        "prompt": "Samurai Jack television animation style, with striking flat geometric shapes, minimal interior linework, elegant elongated silhouettes, dramatic negative space, richly designed backgrounds, and a restrained cinematic color palette. Preserve the specified literary characters and exact scene while emphasizing expressive graphic composition."
+    },
+    {
+        "label": "Avatar: The Last Airbender",
+        "category": "TV & animation",
+        "description": "Expressive drawing \u00b7 Painterly worlds",
+        "prompt": "Avatar: The Last Airbender television animation style, with fluid expressive character drawing, precise ink contours, clean cel shading, naturalistic painted environments, cinematic staging, and richly coordinated earth and sky colors. Preserve the specified literary cast, period clothing, and narrative action within this adventurous animation treatment."
+    },
+    {
+        "label": "Adventure Time",
+        "category": "TV & animation",
+        "description": "Rounded shapes \u00b7 Candy colors",
+        "prompt": "Adventure Time television animation style, with simple rounded characters, tiny expressive facial features, noodle-like limbs, clear flat colors, playful silhouettes, and whimsical graphic landscapes. Preserve the specified literary characters, relationships, setting, and action while translating them into this charming cartoon design."
+    },
+    {
+        "label": "SpongeBob SquarePants",
+        "category": "TV & animation",
+        "description": "Nautical color \u00b7 Zany expressions",
+        "prompt": "SpongeBob SquarePants television animation style, with exuberant facial expressions, bold contours, bright tropical cel colors, tactile hand-painted backgrounds, comic squash-and-stretch poses, and playful decorative shapes. Preserve the specified literary characters and original setting while applying this buoyant cartoon treatment."
+    },
+    {
+        "label": "South Park",
+        "category": "TV & animation",
+        "description": "Paper cutouts \u00b7 Simple geometry",
+        "prompt": "South Park television animation style, with flat construction-paper cutout shapes, simple geometric bodies, large round eyes, minimal shading, crisp colored edges, and deliberately handmade collage scenery. Preserve the specified literary cast, clothing, setting, and action using this spare cut-paper visual language."
     }
 ];
 
@@ -2880,23 +2947,86 @@ function saveSelectedStyles() {
     }
 }
 
-function renderStylePicker() {
-    imageStyleOptions.replaceChildren();
+const ARTIST_STYLE_LABELS = new Set([
+    'Ansel Adams', 'Raphael', 'Rembrandt', 'Johannes Vermeer', 'Caravaggio',
+    'Claude Monet', 'Vincent van Gogh', 'J. M. W. Turner', 'Katsushika Hokusai',
+    'Alphonse Mucha', 'Gustav Klimt', 'Edward Hopper', 'Warhol-style pop art'
+]);
 
-    VISUAL_STYLES.forEach(style => {
+function getStyleCategory(style) {
+    return style.category || (ARTIST_STYLE_LABELS.has(style.label) ? 'Artists' : 'Techniques');
+}
+
+function getVisibleVisualStyles() {
+    const query = imageStyleSearch.value.trim().toLocaleLowerCase();
+    return VISUAL_STYLES.filter(style => (activeStyleCategory === 'All' || getStyleCategory(style) === activeStyleCategory)
+        && `${style.label} ${style.description || ''} ${style.prompt}`.toLocaleLowerCase().includes(query));
+}
+
+function renderStylePicker() {
+    const focused = document.activeElement;
+    const focusedLabel = focused?.dataset?.styleLabel;
+    const focusedRemove = focused?.dataset?.removeStyle;
+    const scrollTop = imageStyleOptions.scrollTop;
+    imageStyleOptions.replaceChildren();
+    imageSelectedStyles.replaceChildren();
+
+    for (const style of VISUAL_STYLES.filter(style => selectedStyleLabels.has(style.label))) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'image-selected-style';
+        chip.dataset.removeStyle = style.label;
+        chip.textContent = `${style.label} ×`;
+        chip.setAttribute('aria-label', `Remove ${style.label} from your style mix`);
+        chip.addEventListener('click', () => toggleStyle(style.label));
+        imageSelectedStyles.appendChild(chip);
+    }
+    imageSelectedStyles.hidden = selectedStyleLabels.size === 0;
+
+    for (const button of imageStyleCategories.querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(button.dataset.styleCategory === activeStyleCategory));
+    }
+    const visible = getVisibleVisualStyles();
+    imageStyleResults.textContent = visible.length
+        ? `${visible.length} style${visible.length === 1 ? '' : 's'} · Click a card to add or remove it from your mix.`
+        : 'No styles match. Try another search or category.';
+    visible.forEach(style => {
+        const category = getStyleCategory(style);
+        const selected = selectedStyleLabels.has(style.label);
         const option = document.createElement('button');
         option.type = 'button';
         option.className = 'image-style';
-        option.textContent = style.label;
         option.dataset.styleLabel = style.label;
-        const selected = selectedStyleLabels.has(style.label);
+        option.dataset.category = category;
         option.classList.toggle('image-style--selected', selected);
-        option.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        option.setAttribute('aria-pressed', String(selected));
+        const badge = document.createElement('span');
+        badge.className = 'image-style-badge';
+        badge.textContent = category === 'TV & animation' ? 'TV' : category === 'Artists' ? 'Aa' : '✳';
+        badge.setAttribute('aria-hidden', 'true');
+        const title = document.createElement('span');
+        title.className = 'image-style-title';
+        title.textContent = style.label;
+        const description = document.createElement('span');
+        description.className = 'image-style-description';
+        description.textContent = style.description || style.prompt.split(/,|\. /)[0];
+        const check = document.createElement('span');
+        check.className = 'image-style-check';
+        check.textContent = selected ? '✓' : '+';
+        check.setAttribute('aria-hidden', 'true');
+        option.append(badge, title, description, check);
         option.addEventListener('click', () => toggleStyle(style.label));
         imageStyleOptions.appendChild(option);
     });
-
+    imageStyleOptions.scrollTop = scrollTop;
     updateStyleSummary();
+    if (focusedLabel) {
+        [...imageStyleOptions.children].find(button => button.dataset.styleLabel === focusedLabel)?.focus({ preventScroll: true });
+    } else if (focusedRemove) {
+        const next = [...imageSelectedStyles.children].find(button => button.dataset.removeStyle === focusedRemove)
+            || imageSelectedStyles.firstElementChild || imageStyleSearch;
+        next.focus({ preventScroll: true });
+    }
 }
 
 function toggleStyle(label) {
@@ -2907,6 +3037,7 @@ function toggleStyle(label) {
     }
     saveSelectedStyles();
     renderStylePicker();
+    if (currentPoem && currentChatSession) renderPoemImages(currentPoem, currentChatSession);
 }
 
 function clearStyleSelection() {
@@ -2914,6 +3045,7 @@ function clearStyleSelection() {
     selectedStyleLabels.clear();
     saveSelectedStyles();
     renderStylePicker();
+    if (currentPoem && currentChatSession) renderPoemImages(currentPoem, currentChatSession);
 }
 
 function updateStyleSummary() {
@@ -4682,6 +4814,13 @@ toggleChatHistory.addEventListener('click', () => {
 chatBrief.addEventListener('change', saveChatToggles);
 chatReadReplies.addEventListener('change', saveChatToggles);
 clearImageStyles.addEventListener('click', clearStyleSelection);
+imageStyleSearch.addEventListener('input', renderStylePicker);
+imageStyleCategories.addEventListener('click', event => {
+    const button = event.target.closest('button[data-style-category]');
+    if (!button) return;
+    activeStyleCategory = button.dataset.styleCategory;
+    renderStylePicker();
+});
 imageSteer.addEventListener('change', saveSteerText);
 imageNameLabels.addEventListener('change', () => {
     try { localStorage.setItem('john-donne-image-name-labels', String(imageNameLabels.checked)); } catch {}
