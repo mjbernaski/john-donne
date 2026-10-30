@@ -20,25 +20,26 @@
     </header>
 
     <main>
+        <p><a href="/faust-voices.html">Explore ElevenLabs voices and compare a Faust scene</a></p>
         <section class="voice-roles" aria-labelledby="voiceRolesTitle">
             <h2 id="voiceRolesTitle" class="voice-roles-title">In use now</h2>
             <div id="voiceRoles" class="voice-roles-list"></div>
         </section>
 
         <div class="image-library-toolbar image-manager-toolbar">
-            <p class="voice-sample-text">Every voice reads the same two lines: <em id="voiceSampleText"></em></p>
+            <p class="voice-sample-text">Preview text: <em id="voiceSampleText"></em></p>
             <div class="image-manager-actions">
-                <button id="voicesPrepare" class="image-manager-refresh" type="button">Prepare every sample</button>
-                <button id="voicesRefresh" class="image-manager-refresh" type="button">Refresh</button>
+                <button id="voicesPause" class="image-manager-refresh" type="button" hidden>Pause</button>
+                <button id="voicesStop" class="image-manager-refresh" type="button" hidden>Stop</button>
             </div>
         </div>
 
         <div id="voicesGrid" class="voice-grid"></div>
     </main>
 
-    <audio id="voicePlayer" class="voice-player" controls preload="none"></audio>
 
-    <script src="streaming-tts.js?v=20261001"></script>
-    <script src="voices.js?v=20260815-41"></script>
+
+    <script src="streaming-tts.js?v=20261023-elevenlabs"></script>
+    <script src="voices.js?v=20261025-account"></script>
 </body>
 </html>

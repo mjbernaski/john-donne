@@ -61,6 +61,18 @@ async function run() {
     assert.equal(context.isChapterSceneImage(prompts[0]), true);
     assert.deepEqual(Array.from(context.getPreviousImageScenes([oldImage, newImage])), [scene]);
 
+    // Repeating a previously illustrated scene must not trigger a diversity gate.
+    const variations = Array.from({length: 16}, (_, i) => context.getSceneVariation(source, i));
+    assert.equal(new Set(variations).size, 16, 'Different framing and passage focus across successive batches');
+    assert(variations.every(v => v.includes('Reader direction takes precedence')));
+    const repeatStart = requests.length;
+    responses = [scene, '{"grounded":true,"reason":"Supported by the chapter"}'];
+    assert.equal(await context.describePoemScene(chapter, context.getImageDirection(0), '', [scene]), scene);
+    assert.equal(requests.length - repeatStart, 2, 'Only planning and source grounding, no diversity rejection');
+    assert(requests[repeatStart].messages[1].content.includes('revisiting any scene or perspective is allowed'));
+    assert(context.getSceneRetryFocus(source, 1).includes('same characters and action may recur'));
+    assert(requests[0].messages[0].content.includes('Explicitly describe the viewing position'));
+
     responses = ['unparseable review'];
     await assert.rejects(context.reviewChapterScene('test-model', source, scene, ''), /Could not verify/);
     responses = Array.from({ length: 3 }, () => ['generic scene', '{"grounded":false,"reason":"Wrong characters"}']).flat();
@@ -79,6 +91,23 @@ async function run() {
     assert.equal(context.getSceneSource(chapter).text.length, 1400);
     assert(context.getImageDirection(0).includes('symbolic image'));
 
+    context.currentBook = manifest.books.find(item => item.userPoems);
+    const essay = JSON.parse(read('user-poems.json')).find(item => item.content.includes('TypeSafe ai'));
+    const essaySource = context.getSceneSource(essay);
+    assert.equal(essaySource.text, essay.content.replace(/\s+/g, ' ').trim());
+    assert(essaySource.text.includes('Radiologist'));
+    const editorial = 'Separate research and product workspaces connect to a coding agent routing tasks through many small fast decision units and a larger reasoning system.';
+    const essayStart = requests.length;
+    responses = ['A couple across a ravine with gulls.', '{"grounded":false,"reason":"Unrelated romance and scenery; depict AI research and decision systems."}', editorial, '{"grounded":true,"reason":"Shows the institutional split and System 1/System 2 architecture."}'];
+    assert.equal(await context.describePoemScene(essay, context.getImageDirection(0), ''), editorial);
+    assert(requests[essayStart].messages[0].content.includes('actual genre'));
+    assert(!requests[essayStart].messages[0].content.includes('one man and one woman'));
+    assert(requests[essayStart + 1].messages[0].content.includes('For nonfiction'));
+    const essayPrompt = context.getImagePrompts(essay, [editorial], 0, [{ label: 'Oil painting', prompt: 'Oil painting.' }], '')[0].prompt;
+    assert(!essayPrompt.includes('period dress'));
+    assert(!essayPrompt.includes('Any couple'));
+    assert(!essayPrompt.includes('natural world'));
+
     for (const dante of manifest.books.filter(item => item.id.startsWith('dante-'))) {
         context.currentBook = dante;
         const canto = JSON.parse(read(dante.poems))[0];
@@ -96,7 +125,7 @@ async function run() {
     }
 
     vm.runInContext(code.slice(code.indexOf('async function generatePoemImageSet('), code.indexOf('function saveFluxApiKey(')), context);
-    async function checkPartialPlan(accepted, switchCollection = false) {
+    async function checkPartialPlan(accepted, switchCollection = false, count = 3) {
         const session = { images: [] };
         const submitted = [];
         let planned = 0;
@@ -117,10 +146,10 @@ async function run() {
             },
             submitFluxImage: async prompt => { submitted.push(prompt); return 'job-1'; }
         });
-        await context.generatePoemImageSet();
+        await context.generatePoemImageSet(count === 1 ? { count: 1 } : undefined);
         assert.equal(submitted.length, accepted);
         assert.equal(session.images.length, accepted);
-        if (accepted && accepted < 3) assert(session.imagePlanningNotice.includes(`Planned ${accepted} of 3`));
+        if (accepted && accepted < count) assert(session.imagePlanningNotice.includes(`Planned ${accepted} of ${count}`));
         assert.equal(session.imagesLoading, Boolean(accepted));
         assert.equal(session.imagePlanningActive, false);
     }
@@ -128,6 +157,7 @@ async function run() {
     await checkPartialPlan(0);
     await checkPartialPlan(1, true);
     await checkPartialPlan(3);
+    await checkPartialPlan(1, false, 1);
 
     vm.runInContext(code.slice(code.indexOf('function completeImageJob('), code.indexOf('async function reconcilePoemImageJobs(')), context);
     for (const stillPlanning of [true, false]) {

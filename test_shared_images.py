@@ -50,6 +50,28 @@ assert.equal(context.imageIdentity({filename:'poem-images/assets/copy.png',origi
                     h._save_library_image()
                     self.assertEqual(send.call_args.args, (200, {'deleted':True}))
 
+    def test_save_label_plan_without_changing_original(self):
+        h = object.__new__(server.PoetryRequestHandler)
+        filename = 'poem-images/assets/example.png'
+        labels = [dict(name='Dante', x=0.2, y=0.8, targetX=0.3, targetY=0.5)]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.multiple(server, IMAGE_LIBRARY_PATH=root/'manifest.json'):
+                h._write_image_manifest({'abc': [dict(filename=filename)]})
+                payload = dict(poemId='abc', filename=filename, caption='Dante follows Virgil.', labels=labels)
+                with patch.object(h, '_read_json_body', return_value=payload), patch.object(h, '_send_json') as send:
+                    h._save_library_image()
+                    self.assertEqual(send.call_args.args[0], 200)
+                saved = h._image_manifest()['abc'][0]
+                self.assertEqual(saved['filename'], filename)
+                self.assertEqual(saved['labels'], labels)
+                self.assertEqual(saved['labelVersion'], 'vision-labels-v1')
+                payload['labels'] = [dict(name='Dante', x=2, y=0.5, targetX=0.3, targetY=0.5)]
+                with patch.object(h, '_read_json_body', return_value=payload), patch.object(h, '_send_json') as send:
+                    h._save_library_image()
+                    self.assertEqual(send.call_args.args[0], 400)
+                self.assertEqual(h._image_manifest()['abc'][0]['labels'], labels)
+
     def test_reject_paths_and_urls(self):
         h = object.__new__(server.PoetryRequestHandler)
         for payload in [[], {'poemId':'abc','filename':'../secret.png'}, {'poemId':'abc','filename':'http://host/image.png'}, {'poemId':'../abc','filename':'a.png'}]:

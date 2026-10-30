@@ -108,7 +108,9 @@ def generate(job: dict) -> None:
     transcript = f"{job['title']}.\n\n{job['text']}" if job["index"] == 0 else job["text"]
     voice = server.load_tts_voices()[VOICE_ROLE]
     instruction = str(BOOK.get("readingNotes", "Measured and natural."))
-    upstream_wav = server.PoetryRequestHandler._request_local_audio(None, transcript, voice, instruction)
+    upstream_wav = server.PoetryRequestHandler._request_local_audio(
+        object.__new__(server.PoetryRequestHandler), transcript, voice, instruction
+    )
     with wave.open(io.BytesIO(upstream_wav), "rb") as source:
         frames = source.readframes(source.getnframes())
         channels = source.getnchannels()
@@ -120,7 +122,9 @@ def generate(job: dict) -> None:
         target.setsampwidth(width)
         target.setframerate(rate)
         target.writeframes(frames)
-    server.cache_audio(job["filename"], output.getvalue(), job["key"])
+    server.cache_audio(job["filename"], output.getvalue(), job["key"],
+                       dict(book=BOOK_ID, entryTitle=job["chapter"], kind="poem",
+                            provider="local", model=server.LOCAL_TTS_MODEL, voice=VOICE_ROLE))
 
 
 def stitch_chapter(queue: list[dict], end_position: int) -> None:
@@ -139,7 +143,9 @@ def stitch_chapter(queue: list[dict], end_position: int) -> None:
     if (server.AUDIO_LIBRARY_PATH / f"{key}.wav").exists():
         return
     filename = f"Perry Miller - {chapter} - Complete chapter - {VOICE_LABEL}.wav"
-    server.cache_audio(filename, server.stitch_wav_files(paths), key)
+    server.cache_audio(filename, server.stitch_wav_files(paths), key,
+                       dict(book=BOOK_ID, entryTitle=chapter, kind="poem",
+                            provider="local", model=server.LOCAL_TTS_MODEL, voice=VOICE_ROLE))
     print(f"STITCHED {chapter}: {len(chapter_jobs)} parts", flush=True)
 
 

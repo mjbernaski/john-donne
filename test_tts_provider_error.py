@@ -15,7 +15,7 @@ class ProviderErrorTests(unittest.TestCase):
         server.TTS_JOBS[job_id] = {'state': 'queued', 'completed': 0, 'reused': 0}
         try:
             with patch.object(handler, '_render_tts', side_effect=error) as render:
-                handler._run_tts_job(job_id, [{}, {}], 'secret-key')
+                handler._run_tts_job(job_id, [dict(title='Test', text='Hello', voice='feminine', provider='gemini'), dict(title='Next', text='World', voice='feminine', provider='gemini')], 'secret-key')
             self.assertEqual(render.call_count, 1)
             job = server.TTS_JOBS[job_id]
             self.assertEqual(job['state'], 'failed')
@@ -25,6 +25,19 @@ class ProviderErrorTests(unittest.TestCase):
             self.assertNotIn('not public', job['error'])
         finally:
             del server.TTS_JOBS[job_id]
+
+    def test_generation_refusal_preserves_reason(self):
+        handler = object.__new__(server.PoetryRequestHandler)
+        for payload, reason in [
+            ({'promptFeedback': {'blockReason': 'SAFETY'}}, 'SAFETY'),
+            ({'candidates': [{'finishReason': 'RECITATION'}]}, 'RECITATION'),
+        ]:
+            def decode(request, decoder, **kwargs):
+                return decoder(payload)
+            with patch.object(handler, '_request_tts_with_retries', side_effect=decode):
+                with self.assertRaisesRegex(server.TTSGenerationError, reason) as raised:
+                    handler._request_gemini_audio('test-key', 'Gacrux', 'Read this.')
+                self.assertIn('not an insufficient-credit error', str(raised.exception))
 
     def test_non_json_body_stays_private(self):
         error = HTTPError('https://example.invalid', 502, 'Bad Gateway', {}, io.BytesIO(b'<html>private</html>'))

@@ -17,6 +17,32 @@ class QwenTests(unittest.TestCase):
     def handler(self):
         return object.__new__(server.PoetryRequestHandler)
 
+    def test_reader_part_is_fully_generated_in_short_requests(self):
+        text = ('A sentence to read completely. ' * 160) + 'The final words.'
+        spoken = []
+        def render(chunk, voice, instruction):
+            self.assertLessEqual(len(chunk), 850)
+            spoken.append(chunk)
+            output = io.BytesIO()
+            with wave.open(output, 'wb') as wav:
+                wav.setparams((1, 2, 24000, 0, 'NONE', 'not compressed'))
+                wav.writeframes(b'\x01\x00' * len(chunk))
+            return output.getvalue()
+        request = ('Test', text, 'masculine', 'poem', 'local', 'Qwen3-TTS', False,
+                   {'id': 'test'}, 'test-key', 'test.wav')
+        with patch.object(server.PoetryRequestHandler, '_tts_request', return_value=request), \
+             patch.object(server.PoetryRequestHandler, '_library_audio', return_value=None), \
+             patch.object(server.PoetryRequestHandler, '_tts_progress'), \
+             patch.object(server.PoetryRequestHandler, '_request_local_audio', side_effect=render), \
+             patch.object(server, 'cache_audio', return_value='/test.wav'):
+            audio, _, reused = self.handler()._render_tts_locked({}, '')
+        self.assertFalse(reused)
+        self.assertGreater(len(spoken), 1)
+        self.assertEqual(''.join(''.join(spoken).split()), ''.join(text.split()))
+        self.assertTrue(spoken[-1].endswith('The final words.'))
+        with wave.open(io.BytesIO(audio)) as wav:
+            self.assertEqual(wav.getnframes(), sum(map(len, spoken)))
+
     def test_pcm_is_saved_with_final_wav_header(self):
         pcm = b'\x01\x00' * 2400
         with patch.object(server, 'urlopen', return_value=Response(pcm)) as opened:
@@ -57,6 +83,11 @@ class QwenTests(unittest.TestCase):
             self.assertEqual(handler._tts_request(dict(title='Test', text='Hello', voice='custom_reader'))[2], 'custom_reader')
             self.assertNotEqual(server.audio_library_key('Test', 'Hello', 'ryan', 'poem', 'colony-to-province'),
                                 server.audio_library_key('Test', 'Hello', 'custom_reader', 'poem', 'colony-to-province'))
+
+    def test_output_ceiling_is_not_accepted_as_complete_audio(self):
+        with patch.object(server, 'urlopen', return_value=Response(b'\x00' * 15728640)):
+            with self.assertRaisesRegex(ValueError, 'audio output limit'):
+                self.handler()._request_local_audio('A long reading', 'ryan')
 
     def test_input_and_incomplete_pcm_rejected(self):
         with self.assertRaises(ValueError):

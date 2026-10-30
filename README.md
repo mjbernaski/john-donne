@@ -291,6 +291,9 @@ Change an address there and restart the service; nothing else needs editing.
 The environment variables `FLUX_BASE_URL`, `VLLM_BASE_URL`, and `VLLM_FALLBACK_URL` override the file,
 and `--host`/`--port` override the `server` block.
 
+Discuss allows up to 8,192 output tokens per reply for extended answers. The
+**Be brief** option keeps its 320-token limit and asks for three or four sentences.
+
 Discuss tries the primary model server first, then the fallback on connection
 failures, timeouts, rate limits, or server errors before streaming starts. Model
 discovery has a five-second timeout. Completion requests resolve the selected
@@ -410,9 +413,9 @@ departs from the subject, so it can override the scene description the model
 wrote rather than merely adding to it. Like the style selection it is kept in
 browser storage, so it holds across reloads until it is cleared.
 
-Narration can use either the Qwen3-TTS service configured by
+Narration can use the Qwen3-TTS service configured by
 `upstreams.tts` in `config.json` (currently `http://mjbmini.local:7860`) or
-Gemini 3.8 Flash-Lite TTS, 3.8 Flash TTS, 3.1 Flash TTS, or 2.5 Flash Preview TTS. Local Qwen3 is the default and requires no cloud
+Gemini 3.8 Flash-Lite TTS, 3.8 Flash TTS, 3.1 Flash TTS, 2.5 Flash Preview TTS, or ElevenLabs Multilingual v2. Local Qwen3 is the default and requires no cloud
 API key. The Gemini voice selector offers all 30 studio voices and remembers the
 selected reading voice in this browser. **Preview selected voice** reads the same
 short passage for each voice, shows an estimated cost, and reuses saved previews
@@ -685,3 +688,94 @@ PCM playback; streamed audio is not saved. Voices refresh discovers custom
 voices from `/v1/audio/voices`. Keep the application and TTS service on the LAN.
 
 Reimport the supplied Miller sequel with `python3 import_miller_pdf.py source-pdfs/The-New-England-Mind-Complete-OCR.pdf` (requires PyMuPDF). The importer uses the verified scan’s page geometry and chapter boundaries; it does not modify the first Miller collection.
+
+### Human Behavior and the Principle of Least Effort
+
+George Kingsley Zipf’s *Human Behavior and the Principle of Least Effort:
+An Introduction to Human Ecology* (Addison-Wesley Press, 1949) is available
+under Nonfiction. The collection includes the preface, all twelve chapters
+grouped into two parts, and twelve chapter-specific reference entries.
+The source is the supplied [Internet Archive OCR](https://archive.org/stream/in.ernet.dli.2015.90211/2015.90211.Human-Behavior-And-The-Principle-Of-Least-Effort_djvu.txt).
+
+To rebuild, save that full-text page or its raw OCR text locally and run:
+
+```sh
+python3 parse_least_effort.py /path/to/least-effort.txt
+```
+
+The standard-library importer excludes title pages, contents, and the printed
+index, removes recognized running heads and standalone folios, and rejoins
+hard-wrapped prose. OCR errors remain; equations, tables, illustrations,
+footnote markers, and reference ordering should be checked against the scan.
+
+ElevenLabs narration uses server-side `ELEVENLABS_API_KEY` in `.env`, with Rachel, George, and Adam voice choices. `ELEVENLABS_VOICE_ID` can override George. It generates 24 kHz WAV recordings through the existing queue and saved-audio library. Restart the server after changing credentials.
+
+### The Sorrows of Young Werther
+
+Goethe’s novel is available under Fiction in English from
+[Project Gutenberg ebook 2527](https://www.gutenberg.org/ebooks/2527).
+The 82 entries include the preface, dated letters in Books I and II, and the
+complete concluding editor narrative with its embedded letters. Paragraphs are
+retained; contents and Gutenberg boilerplate are excluded. The supplied edition
+does not identify its translator.
+
+Rebuild with `python3 parse_werther.py`, or pass a locally downloaded Gutenberg
+HTML file as its argument. Reading, discussion, and narration use the existing
+library features.
+
+
+### Doctor Faustus: character performance
+
+`doctor-faustus` imports Gutenberg ebook 779, Christopher Marlowe's *The Tragical History of Doctor Faustus*, the 1604 text edited by Alexander Dyce. `python3 parse_faustus.py` rebuilds `poems-faustus.json`; pass a local Gutenberg HTML file to import offline. The complete play retains speaker labels and stage directions; editorial footnotes are excluded. The source does not number scenes.
+
+Open the play and choose **Perform with character voices**. **Character voices · ElevenLabs** assigns voices to the principal roles and one neutral voice to minor characters; overrides are saved in this browser. Defaults: Faustus—George; Mephistophilis—Adam; Wagner—Charlie; Clown—Callum; Robin—Harry; Lucifer—Brian; Good Angel—Alice; Evil Angel—Daniel; Chorus—Bill; narrator and minor characters—River. The cast uses verified ElevenLabs public catalog IDs, with Flash v2.5 streaming and saved audio per cue. Narration follows the source's exact speaker labels, continues automatically, and does not announce character names. **Listen** uses character voices by default for plays with a performance cast. No paid audio is generated during import or verification; generation starts on playback or an explicit generation request.
+
+Checks: `node test_character_performance.cjs`, `python3 -m unittest test_parse_faustus.py test_elevenlabs_tts.py`, and the existing Listen/streaming regression scripts.
+
+
+### Goethe’s Faust in English
+
+`goethe-faust` adds Bayard Taylor’s English verse translation under Drama.
+The 53 reading sections contain the dedication, theatrical prelude, prologue
+in heaven, 25 scenes of Part One, and all five acts of Part Two. Speaker labels,
+verse line breaks, and stage directions are preserved. Editorial introductions,
+footnotes, and website navigation are omitted. Listen uses the existing narration
+controls; adding the book does not generate audio.
+
+Sources: [Part One, Gutenberg 14591](https://www.gutenberg.org/files/14591/14591-h/14591-h.htm)
+and [Part Two, Wikisource](https://en.wikisource.org/wiki/Faust_(trans._Bayard_Taylor)).
+To rebuild, save the Gutenberg HTML as `part-one.html` and each Wikisource page
+listed in `parse_goethe_faust.PATHS` with slashes replaced by hyphens (for example,
+`Act_I-I.html`) in a source directory. Run `python3 parse_goethe_faust.py SOURCE_DIR`.
+Verify with `python3 -m unittest test_parse_goethe_faust.py`.
+
+
+### ElevenLabs account voices and Faust audition
+
+Open `/faust-voices.html` (also linked from Voices and the character cast panel)
+to load account voices, hear existing previews, select Faust and Mephistopheles,
+and compare a fixed 514-character excerpt from Part One, Scene IV. Flash renders
+the six cues separately; an available `eleven_v4` model uses Text to Dialogue.
+Models are discovered from the account: unavailable v4 models are never silently
+replaced. The page shows estimated base prices before explicit generation.
+Matching samples are reused from `faust-comparison/`; completed Flash turns are
+also saved individually so a failed later turn does not require regenerating them.
+
+The server proxies `/api/elevenlabs/catalog`, exposing only voice descriptions,
+preview URLs, labels, and speech model names; API credentials stay on the server.
+Account voices are selectable in narration and character cast controls. Add more
+voices through ElevenLabs’ Voice Library, then refresh the page (catalog refreshes
+within five minutes). Authentication errors leave the default voice options intact.
+Use a working `ELEVENLABS_API_KEY` in `.env` and restart the poetry server after
+changing it. No audio is generated by catalog discovery or page load.
+
+Checks: `python3 -m unittest test_elevenlabs_catalog.py test_elevenlabs_tts.py`,
+`node test_character_performance.cjs`, and `node test_reader_listen.cjs`.
+
+Goethe’s Faust also supports **Perform** in every scene and opening section,
+using the same cast editor and cue selector as Marlowe. Main characters have
+configurable voices; other roles use Minor characters, and stage directions use
+Narrator. Cues come from the imported speaker labels in both parts. Cue numbering
+starts at 1 in each section. Importing again rebuilds the performance cues without
+generating audio. Verify cue ordering and text tracking with
+`node test_character_performance.cjs`.

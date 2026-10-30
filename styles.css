@@ -1872,10 +1872,10 @@ body {
 .modal-poem-content.is-following-reading .poem-line.is-reading-current::before {
     content: '';
     position: absolute;
-    top: calc(var(--reading-row-offset, 0px) - 1.65em);
+    top: var(--reading-row-offset, 0px);
     left: 0.55rem;
     width: 3px;
-    height: 5.2em;
+    height: var(--reading-row-height, 1em);
     border-radius: 50%;
     background: linear-gradient(
         to bottom,
@@ -2885,3 +2885,75 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--secondary-color);
 }
+
+.collection-discussion #readTab,
+.collection-discussion #visualizeTab { display: none; }
+
+.chat-response-voice {
+    max-width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 6px;
+    background: var(--bg-primary, #fff);
+    color: inherit;
+    font: inherit;
+    font-size: 0.8rem;
+}
+
+.chat-suggestion[aria-pressed="true"] {
+    background: var(--secondary-color);
+    border-color: var(--secondary-color);
+    color: white;
+}
+
+.poem-image-scene-caption {
+    margin: 0;
+    padding: 10px 12px;
+    background: #fff;
+    color: #49433c;
+    font: 0.8rem/1.45 var(--font-serif);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+.image-library-card .image-scene-caption {
+    color: #49433c;
+    font: 0.8rem/1.45 var(--font-serif);
+    white-space: normal;
+}
+
+.image-count-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-light);
+    font: 0.7rem var(--font-sans);
+}
+.image-count-control select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: white;
+    color: var(--primary-color);
+    font: inherit;
+}
+
+.image-name-label-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-light);
+    font: 0.7rem/1.4 var(--font-sans);
+    cursor: pointer;
+}
+.image-name-label-control input { accent-color: var(--secondary-color); }
+
+.image-label-status {
+    display: block;
+    margin: 0;
+    padding: 4px 12px 8px;
+    background: #fff;
+    color: #655b50;
+    text-align: center;
+    font: 500 .65rem/1.4 var(--font-sans);
+}
+.image-library-card .image-label-status { margin-top: 4px; padding: 0; background: transparent; text-align: left; }

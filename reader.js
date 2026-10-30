@@ -1,4 +1,4 @@
-// Shared navigation, playback, and the opt-in literary reader.
+// Shared navigation, playback, and the literary reader.
 // Playback snapshots deliberately do not read the currently browsed collection.
 window.Reader = (() => {
     const $ = id => document.getElementById(id);
@@ -6,7 +6,7 @@ window.Reader = (() => {
     const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(`${KEY}:${key}`)) ?? fallback; } catch { return fallback; } };
     const write = (key, value) => { try { localStorage.setItem(`${KEY}:${key}`, JSON.stringify(value)); } catch {} };
     const defaults = { theme: 'paper', size: 22, spacing: 1.65, width: 68 };
-    let preview = read('preview', false) === true;
+    const preview = true;
     let partLines = read('part-lines', true) !== false;
     const playbackSpeeds = [0.8, 0.9, 1, 1.2, 1.4];
     let playbackSpeed = read('playback-speed', 1);
@@ -17,6 +17,8 @@ window.Reader = (() => {
     let manifest = [], category = 'All', libraryQuery = '', librarySort = 'author';
     let selected = null, playback = null, playVersion = 0, lastPlaybackSave = 0;
     let findMatches = [], findIndex = -1;
+    let streamStart = null;
+    let performanceMode = false;
     let generationCheckPending = false, resolveDuplicateChoice = null;
     const snapshots = new Map(), jobs = new Map();
     const node = (tag, className, text) => { const el = document.createElement(tag); el.className = className; if (text) el.textContent = text; return el; };
@@ -52,7 +54,6 @@ window.Reader = (() => {
         document.body.style.setProperty('--reader-size', `${appearance.size}px`);
         document.body.style.setProperty('--reader-leading', appearance.spacing);
         document.body.style.setProperty('--reader-width', `${appearance.width}ch`);
-        document.querySelectorAll('[data-reader-preview]').forEach(el => { el.checked = preview; });
         document.querySelectorAll('[data-appearance]').forEach(el => {
             el.value = appearance[el.dataset.appearance];
             const output = el.parentElement.querySelector('output');
@@ -68,12 +69,12 @@ window.Reader = (() => {
     function updatePanelSemantics() {
         const split = preview && matchMedia('(min-width: 1100px)').matches && modalContentElement.dataset.modalTab === 'discuss';
         panel().setAttribute('role', split ? 'region' : 'tabpanel');
-        panel().setAttribute('aria-labelledby', split ? 'modalTitle' : modalContentElement.dataset.modalTab === 'visualize' ? 'visualizeTab' : 'readTab');
+        panel().setAttribute('aria-labelledby', split ? 'modalTitle' : modalContentElement.dataset.modalTab === 'visualize' ? 'visualizeTab' : modalContentElement.dataset.modalTab === 'combo' ? 'comboTab modalTitle' : 'readTab');
     }
     function install() {
         const toolbar = node('div', 'reader-tools');
         toolbar.innerHTML = `<div class="reader-entry-nav"><button id="readerPrevious" type="button">← Previous</button><button id="readerContents" type="button">Contents</button><button id="readerNext" type="button">Next →</button></div>
-            <div class="reader-tools-options"><label class="reader-preview-toggle"><input type="checkbox" data-reader-part-lines checked> Part lines</label><label class="reader-preview-toggle"><input type="checkbox" data-reader-preview> New reader</label>
+            <div class="reader-tools-options"><label class="reader-preview-toggle"><input type="checkbox" data-reader-part-lines checked> Part lines</label>
             <details id="readerAppearance"><summary>Appearance</summary><div class="reader-appearance-fields">
             <label>Theme<select data-appearance="theme"><option value="paper">Paper</option><option value="sepia">Sepia</option><option value="dark">Dark</option></select></label>
             <label>Text size <output></output><input aria-label="Text size" data-appearance="size" type="range" min="16" max="28" step="1"></label>
@@ -104,12 +105,46 @@ window.Reader = (() => {
         modalTitle.tabIndex = -1; bookTitle.tabIndex = -1;
         const audio = document.querySelector('.poem-audio');
         const details = node('details', 'reader-audio-settings'); details.id = 'readerAudioSettings';
-        const summary = node('summary', '', 'Audio settings & downloads'); details.append(summary);
+        const summary = node('summary', '', 'Generate & download'); details.append(summary);
         while (audio.firstChild) details.append(audio.firstChild);
         audio.append(details);
         const listen = node('div', 'reader-listen');
-        listen.innerHTML = '<button id="readerListen" type="button">Listen</button><button id="readerStream" type="button">Stream</button><button id="readerStopStream" type="button">Stop stream</button><span id="readerListenNote">Listen to this text</span>';
+        listen.innerHTML = '<button id="readerListen" type="button">Listen</button><button id="readerRewindStream" type="button" aria-label="Rewind 15 seconds" title="Rewind 15 seconds">↶ 15</button><button id="readerPauseStream" type="button" hidden>Pause</button><button id="readerStopStream" type="button" hidden>Stop</button><button id="readerStreamFromHere" type="button" hidden>Read from selection</button><span id="readerListenNote" role="status" aria-live="polite">ElevenLabs narration</span>';
+
         audio.prepend(listen);
+        // Keep rewind reachable while scrolling or viewing another tab.
+        const playbackTools = node('div', 'reader-playback-tools');
+        playbackTools.append($('readerRewindStream'));
+        const transport = node('button', '', 'Continue'); transport.id = 'readerTransport'; transport.type = 'button';
+        transport.disabled = true; transport.setAttribute('aria-label', 'Continue narration');
+        transport.onclick = togglePlaybackPause;
+        playbackTools.append(transport);
+        const alwaysProgress = node('span', '', ''); alwaysProgress.id = 'readerAlwaysProgress';
+        alwaysProgress.setAttribute('role', 'status');
+        const currentCue = node('span', '', ''); currentCue.id = 'readerCurrentCue';
+        currentCue.setAttribute('role', 'status');
+        const progressDetail = node('span', 'reader-playback-detail');
+        const timing = node('small', 'reader-playback-time'); timing.id = 'readerPlaybackTime';
+        progressDetail.append(alwaysProgress, timing);
+        playbackTools.append(currentCue, progressDetail); document.body.append(playbackTools);
+        const voiceControls = node('div', 'reader-voice-controls');
+        voiceControls.append(poemVoice.closest('label'), followReading);
+        listen.before(voiceControls);
+        const perform = node('button', '', 'Perform with character voices');
+        perform.id = 'readerPerform'; perform.type = 'button'; perform.hidden = true;
+        $('readerListen').after(perform);
+        const castPanel = node('details', 'reader-cast'); castPanel.id = 'readerCast'; castPanel.hidden = true;
+        const castSummary = node('summary', '', 'Character voices · ElevenLabs');
+        const castFields = node('div', 'reader-cast-fields'); castFields.id = 'readerCastFields';
+        const catalogNote = node('p', '', ''); catalogNote.id = 'readerCastCatalogNote';
+        const auditions = node('a', '', 'Explore voices and compare a Faust scene'); auditions.href = '/faust-voices.html';
+        castPanel.append(castSummary, node('p', '', 'Main characters have distinct voices. Minor roles share the neutral voice. Stage directions are read by the narrator.'), catalogNote, auditions, castFields);
+        listen.after(castPanel);
+        perform.onclick = () => {
+            LocalSpeech.prepare();
+            const resumeCue = performanceMode ? Number(poemAudioPart.value) || 0 : 0;
+            performanceMode = true; syncAudio(); choosePart(resumeCue); listenCurrent();
+        };
         const generation = node('section', 'reader-generation-progress'); generation.id = 'readerGenerationProgress'; generation.hidden = true;
         generation.setAttribute('aria-label', 'Generation progress');
         generation.innerHTML = '<strong id="readerGenerationCounts" role="status"></strong><progress id="readerGenerationMeter" aria-label="Requested narration parts completed"></progress><div id="readerGenerationDots" class="reader-generation-dots" role="group" aria-label="Generation status by part"></div><div class="reader-generation-legend"><span data-state="done">Done</span><span data-state="generating">Underway</span><span data-state="retrying">Retrying</span><span data-state="queued">Queued</span><span data-state="failed">Failed</span></div><p id="readerGenerationDetail"></p>';
@@ -134,11 +169,9 @@ window.Reader = (() => {
         setInterval(refreshShared, 15000);
         document.addEventListener('visibilitychange', refreshShared);
         window.addEventListener('focus', refreshShared);
-        const progressLayout = matchMedia('(min-width: 768px)');
-        const updateProgressLayout = () => { progress.open = progressLayout.matches; };
-        progressLayout.addEventListener('change', updateProgressLayout); updateProgressLayout();
+        progress.open = false;
         const dock = node('section', 'reader-player'); dock.id = 'readerPlayer'; dock.hidden = true; dock.setAttribute('aria-label', 'Now playing');
-        dock.innerHTML = '<div class="reader-player-title"><strong id="readerPlayingTitle"></strong><span id="readerPlayingDetail"></span></div><div class="reader-player-controls"><button id="readerPlayPause" type="button">Play</button><button id="readerReturn" type="button">Return to text</button><details class="reader-player-more"><summary>More</summary><button id="readerPrevPart" type="button">Previous part</button><button id="readerNextPart" type="button">Next part</button></details><button id="readerClosePlayer" type="button">Close player</button></div><p id="readerPlayerStatus" role="status"></p>';
+        dock.innerHTML = '<div class="reader-player-title"><strong id="readerPlayingTitle"></strong><span id="readerPlayingDetail"></span><span id="readerPlaybackPercent"></span></div><div class="reader-player-controls"><button id="readerPlayPause" type="button" hidden>Play</button><button id="readerReturn" type="button">Return to text</button><details class="reader-player-more"><summary>More</summary><button id="readerPrevPart" type="button">Previous part</button><button id="readerNextPart" type="button">Next part</button></details><button id="readerClosePlayer" type="button">Close player</button></div><p id="readerPlayerStatus" role="status"></p>';
         dock.append(poemAudioPlayer); poemAudioPlayer.hidden = false; document.body.append(dock);
         const speed = node('label', 'reader-playback-speed', 'Speed ');
         const speedSelect = node('select', ''); speedSelect.id = 'readerPlaybackSpeed';
@@ -153,13 +186,32 @@ window.Reader = (() => {
         };
         speedSelect.onchange = () => { playbackSpeed = Number(speedSelect.value); write('playback-speed', playbackSpeed); applySpeed(); };
         poemAudioPlayer.addEventListener('loadedmetadata', applySpeed);
+        const updatePlaybackPercent = () => {
+            const duration = poemAudioPlayer.duration;
+            const percent = Number.isFinite(duration) && duration > 0
+                ? Math.min(100, Math.floor(100 * poemAudioPlayer.currentTime / duration)) : null;
+            if (LocalSpeech.state !== 'idle') return;
+            updatePlaybackProgress(percent, null, {
+                elapsed: poemAudioPlayer.currentTime, duration: poemAudioPlayer.duration,
+                rate: poemAudioPlayer.playbackRate
+            });
+
+        };
+        for (const event of ['timeupdate', 'loadedmetadata', 'durationchange', 'emptied', 'ended']) {
+            poemAudioPlayer.addEventListener(event, updatePlaybackPercent);
+        }
+
         applySpeed();
         const measureViewport = () => {
+            document.body.style.setProperty('--reader-controls-height', `${playbackTools.getBoundingClientRect().height + 24}px`);
             document.body.style.setProperty('--reader-player-height', `${dock.hidden ? 0 : dock.getBoundingClientRect().height}px`);
             document.body.style.setProperty('--reader-viewport', `${window.visualViewport?.height || innerHeight}px`);
+            document.body.style.setProperty('--reader-viewport-top', `${window.visualViewport?.offsetTop || 0}px`);
         };
         new ResizeObserver(measureViewport).observe(dock);
+        new ResizeObserver(measureViewport).observe(playbackTools);
         window.visualViewport?.addEventListener('resize', measureViewport);
+        window.visualViewport?.addEventListener('scroll', measureViewport);
         window.addEventListener('resize', measureViewport); measureViewport();
         const queueJump = node('button', 'reader-queue-jump', 'Generation'); queueJump.id = 'readerQueueJump'; queueJump.type = 'button'; queueJump.hidden = true;
         document.querySelector('.reader-shell-bar > div').prepend(queueJump);
@@ -182,20 +234,55 @@ window.Reader = (() => {
             partLines = el.checked; write('part-lines', partLines); applyPartLines();
         }));
         applyPartLines();
-        document.querySelectorAll('[data-reader-preview]').forEach(el => el.addEventListener('change', () => {
-            preview = el.checked; write('preview', preview); applyAppearance(); if (currentBook) displayPoems(filteredPoems); renderParts();
-        }));
         document.querySelectorAll('[data-appearance]').forEach(el => el.addEventListener('input', () => { appearance[el.dataset.appearance] = el.value; applyAppearance(); }));
         $('readerReset').onclick = () => { appearance = { ...defaults }; applyAppearance(); };
         $('readerPrevious').onclick = () => adjacent(-1); $('readerNext').onclick = () => adjacent(1);
         $('readerContents').onclick = () => closePoemModal();
-        $('readerListen').onclick = () => { LocalSpeech.stop(); listenCurrent(); };
-        $('readerStream').onclick = () => {
-            if (!selected || selected.provider !== 'local') return;
+        const updateStreamControls = () => {
+            const state = LocalSpeech.state;
+            updateTransportControls();
+            $('readerListen').disabled = state !== 'idle';
+            $('readerPerform').disabled = state !== 'idle';
+            $('readerPauseStream').hidden = $('readerStopStream').hidden = state === 'idle';
+            $('readerPauseStream').textContent = state === 'paused' ? 'Resume' : 'Pause';
+        };
+        window.addEventListener('speechstatechange', updateStreamControls);
+        $('readerListen').onclick = () => {
+            const wasPerformance = performanceMode;
+            performanceMode = Boolean(currentBook?.performanceCast && currentPoem?.performance?.length);
+            syncAudio();
+            if (wasPerformance !== performanceMode) choosePart(0);
+            listenCurrent();
+        };
+        $('readerRewindStream').onclick = rewindPlayback;
+        $('readerPauseStream').onclick = () => LocalSpeech.state === 'paused' ? LocalSpeech.resume() : LocalSpeech.pause();
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection();
+            if (!selection?.rangeCount || selection.isCollapsed) {
+                streamStart = null;
+                $('readerStreamFromHere').hidden = true;
+                return;
+            }
+            const range = selection.getRangeAt(0);
+            const element = range.startContainer.nodeType === Node.ELEMENT_NODE
+                ? range.startContainer : range.startContainer.parentElement;
+            const line = element?.closest('.poem-line-text');
+            if (!line || !modalContent.contains(line)) return;
+            const lines = [...modalContent.querySelectorAll('.poem-line-text')];
+            const index = lines.indexOf(line);
+            const tail = document.createRange();
+            tail.selectNodeContents(line);
+            tail.setStart(range.startContainer, range.startOffset);
+            const text = [tail.toString(), ...lines.slice(index + 1).map(el => el.textContent)].join('\n').trim();
+            streamStart = text ? { poem: currentPoem, text } : null;
+            $('readerStreamFromHere').hidden = !streamStart;
+        });
+        $('readerStreamFromHere').onmousedown = event => event.preventDefault();
+        $('readerStreamFromHere').onclick = () => {
+            if (!selected || !streamStart || streamStart.poem !== currentPoem) return;
             poemAudioPlayer.pause();
-            const part = selected.requests[Number(poemAudioPart.value) || 0];
-            const input = part.speakTitle ? `${part.title}.\n\n${part.text}` : part.text;
-            LocalSpeech.play(input, part.voice, $('readerListenNote'));
+            // A partial reading must never replace a complete saved narration part.
+            LocalSpeech.play(streamStart.text, selected.voice, $('readerListenNote'), 'elevenlabs');
         };
         $('readerStopStream').onclick = () => LocalSpeech.stop();
         $('readerCheckAudio').onclick = () => { if (selected) refreshAvailability(selected); };
@@ -209,6 +296,7 @@ window.Reader = (() => {
         $('readerClosePlayer').onclick = closePlayer;
         $('readerReturn').onclick = () => { if (playback) navigate(urlFor(playback.book, playback.poem)); };
         $('readerPrevPart').onclick = () => stepPlayback(-1); $('readerNextPart').onclick = () => stepPlayback(1);
+        for (const event of ['play', 'pause', 'emptied', 'ended', 'loadedmetadata']) poemAudioPlayer.addEventListener(event, updateTransportControls);
         poemAudioPlayer.addEventListener('play', updateDock); poemAudioPlayer.addEventListener('pause', updateDock);
         poemAudioPlayer.addEventListener('timeupdate', () => { if (Date.now() - lastPlaybackSave > 2000) persistPlayback(); });
         poemAudioPlayer.addEventListener('error', () => { $('readerPlayerStatus').textContent = 'This recording could not be loaded. Return to the text to check saved audio.'; });
@@ -312,7 +400,7 @@ window.Reader = (() => {
         const index = allPoems.indexOf(currentPoem) + direction;
         if (index >= 0 && index < allPoems.length) openPoemModal(allPoems[index]);
     }
-    function beforeOpen() { savePosition(); if (!isOpen()) returnFocus = document.activeElement; }
+    function beforeOpen() { streamStart = null; if ($('readerStreamFromHere')) $('readerStreamFromHere').hidden = true; savePosition(); if (!isOpen()) returnFocus = document.activeElement; }
     function clearFind() { $('readerFind').value = ''; findInText(false); }
     function findInText(scroll = true) {
         const query = $('readerFind').value.trim();
@@ -347,6 +435,8 @@ window.Reader = (() => {
         if (scroll && current) current.scrollIntoView({ block: 'center', behavior: 'instant' });
     }
     function opened(poem) {
+        performanceMode = Boolean(currentBook?.performanceCast && poem?.performance?.length);
+        renderCast();
         showLibrary(false); activeEntry = entryKey(currentBook, poem);
         chatInput.value = drafts.get(activeEntry) || '';
         const saved = positions[activeEntry];
@@ -367,8 +457,45 @@ window.Reader = (() => {
             target.focus({ preventScroll: true });
         }
     }
+    let castCatalogRequested = false;
+    function renderCast() {
+        const supported = Boolean(currentBook?.performanceCast && currentPoem?.performance?.length);
+        $('readerPerform').hidden = $('readerCast').hidden = !supported;
+        $('readerListen').textContent = supported ? 'Listen with character voices' : 'Listen';
+        if (!supported) return;
+        if (!castCatalogRequested) {
+            castCatalogRequested = true;
+            $('readerCastCatalogNote').textContent = 'Loading account voices…';
+            CharacterPerformance.loadVoices().then(data => {
+                $('readerCastCatalogNote').textContent = `${data.voices.length} account voices available, alongside the default cast.`;
+                renderCast();
+            }).catch(error => { $('readerCastCatalogNote').textContent = error.message; });
+        }
+        const book = currentBook, cast = CharacterPerformance.castFor(book, read(`cast:${book.id}`, {}));
+        $('readerCastFields').replaceChildren(...Object.entries(cast).map(([role, voice]) => {
+            const label = node('label', '', role === 'MINOR' ? 'Minor characters' : role.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()));
+            const select = node('select', ''); select.setAttribute('aria-label', `${label.textContent} voice`);
+            select.append(...Object.entries(CharacterPerformance.voices).map(([key, name]) => new Option(name, key)));
+            select.value = voice;
+            select.onchange = () => {
+                const overrides = read(`cast:${book.id}`, {}); overrides[role] = select.value;
+                write(`cast:${book.id}`, overrides);
+                if (performanceMode) { ++playVersion; LocalSpeech.stop(); poemAudioPlayer.pause(); syncAudio(); choosePart(0); }
+            };
+            label.append(select); return label;
+        }));
+    }
     function snapshot(poem = currentPoem, book = currentBook) {
-        const provider = selectedTtsProvider(), model = selectedGeminiTtsModel(), voice = poemVoice.value;
+        if (performanceMode && book.performanceCast && poem.performance?.length) {
+            const cast = CharacterPerformance.castFor(book, read(`cast:${book.id}`, {}));
+            const requests = CharacterPerformance.requestsFor(poem, book, cast);
+            const id = `${entryKey(book, poem)}:performance:${stableHash(JSON.stringify(cast))}`;
+            if (!snapshots.has(id)) snapshots.set(id, { id, poem, book, provider: 'elevenlabs', model: 'eleven_flash_v2_5', voice: 'cast', performance: true, requests,
+                browserKeys: requests.map((part, i) => `performance:${id}:${i}:${part.voice}`),
+                availability: requests.map(() => ({ state: 'checking', url: null })), checked: 0, checking: null });
+            return snapshots.get(id);
+        }
+        const provider = selectedTtsProvider(), model = ttsModelKey(provider), voice = poemVoice.value;
         const texts = getNarrationParts(poem, provider, book);
         const requests = texts.map((text, index) => ({ title: narrationRequestTitle(poem, index, texts.length), text, voice, provider, model, kind: 'poem', book: book.id, speakTitle: index === 0, filename: `${book.poet || book.name} - ${poem.title} - Part ${index + 1} - ${ttsVoiceName(voice, provider)}.wav` }));
         const id = `${entryKey(book, poem)}:${provider}:${model}:${voice}`;
@@ -485,6 +612,10 @@ window.Reader = (() => {
     function renderParts() {
         if (!selected || !$('readerParts')) return;
         const index = Number(poemAudioPart.value) || 0;
+        if (poemAudioPart.options.length !== selected.requests.length) {
+            poemAudioPart.replaceChildren(...selected.requests.map((part, i) => new Option(selected.performance ? `Cue ${i + 1} · ${part.speaker}` : `Part ${i + 1}`, i)));
+            poemAudioPart.value = Math.min(index, selected.requests.length - 1);
+        }
         const options = [...$('readerPartSelect').options];
         if (options.length !== selected.requests.length) $('readerPartSelect').replaceChildren(...selected.requests.map((_, i) => new Option(`Part ${i + 1}`, i)));
         $('readerPartSelect').value = index;
@@ -497,7 +628,7 @@ window.Reader = (() => {
             button.type = 'button'; button.dataset.index = i; button.dataset.state = state; button.setAttribute('aria-pressed', String(i === index)); button.onclick = () => choosePart(i); return button;
         }));
         if (focusedIndex !== null) $('readerParts').querySelector(`[data-index="${focusedIndex}"]`)?.focus({ preventScroll: true });
-        $('readerListenNote').textContent = `${ttsVoiceName(selected.voice, selected.provider)} · Part ${index + 1} of ${selected.requests.length}`;
+        if (LocalSpeech.state === 'idle') $('readerListenNote').textContent = selected.performance ? `${selected.requests[index]?.speaker} · Cue ${index + 1} of ${selected.requests.length}` : `${ttsVoiceName(selected.voice, selected.provider)} · Part ${index + 1} of ${selected.requests.length}`;
         const work = jobs.get(selected.id);
         $('readerGenerationProgress').hidden = !work;
         if (work) {
@@ -520,8 +651,8 @@ window.Reader = (() => {
         $('readerPartSummary').textContent = `Audio parts · ${savedCount} saved${phase ? ` · ${phase}` : ''}`;
         $('readerProgress').textContent = work ? generationMessage(work) : (selected.availability.some(p => p.state === 'unknown') ? 'Some saved audio could not be checked. Try Check saved audio again.' : `${savedCount} of ${selected.requests.length} parts saved`);
         $('readerResume').hidden = work?.job?.state !== 'failed' && !work?.error;
-        $('readerListen').disabled = false;
-        $('readerStream').hidden = $('readerStopStream').hidden = selected.provider !== 'local';
+        $('readerListen').disabled = $('readerPerform').disabled = LocalSpeech.state !== 'idle';
+
     }
     function choosePart(index) {
         poemAudioPart.value = index; poemAudioPart.dispatchEvent(new Event('change')); renderParts();
@@ -531,7 +662,7 @@ window.Reader = (() => {
         const index = Number(poemAudioPart.value) || 0;
         const work = jobs.get(selected.id);
         if (work?.running) { $('readerProgress').textContent = work.message || 'This reading is already queued.'; return; }
-        $('readerGenerationInfo').textContent = `${ttsVoiceName(selected.voice, selected.provider)} · ${selected.provider === 'gemini' ? selected.model : 'Local narration'} · Part ${index + 1} of ${selected.requests.length}. `
+        $('readerGenerationInfo').textContent = `${ttsVoiceName(selected.voice, selected.provider)} · ${selected.provider === 'elevenlabs' ? 'ElevenLabs · Multilingual v2' : selected.provider === 'gemini' ? selected.model : 'Local narration'} · Part ${index + 1} of ${selected.requests.length}. `
             + (selected.provider === 'gemini' ? `${formatGeminiTtsCost(selected.requests[index].text, 'Current part')}; ${formatGeminiTtsCost(selected.requests.slice(index).map(p => p.text).join('\n'), 'Remaining range before saved-part reuse')}. ` : '')
             + 'Saved parts are reused. Change voice or model in Audio settings.';
         $('readerGenerateRemaining').hidden = selected.requests.length - index <= 1;
@@ -539,19 +670,44 @@ window.Reader = (() => {
     }
     async function listenCurrent() {
         if (!selected) return;
+        LocalSpeech.prepare();
+        // Queue one new Visualize image without delaying narration.
+        void generatePoemImageSet({ count: 1 });
         const snap = selected, index = Number(poemAudioPart.value) || 0;
-        await refreshAvailability(snap);
-        if (selected !== snap) return;
-        if (snap.availability[index].state === 'saved') await startPlayback(snap, index);
-        else generationChoice();
+        await listenPart(snap, index);
     }
-    async function playSelected() { selected = snapshot(); await startPlayback(selected, Number(poemAudioPart.value) || 0); }
+    async function listenPart(snap, index) {
+        const version = ++playVersion;
+        if (!snap.checked || Date.now() - snap.checked > 15000) await refreshAvailability(snap);
+        if (selected?.id !== snap.id || version !== playVersion) return;
+        if (snap.availability[index]?.state === 'saved') await startPlayback({ ...snap, continuousListen: true }, index);
+        else {
+            poemAudioPlayer.pause();
+            LocalSpeech.stop();
+            playback = null;
+            choosePart(index);
+            const part = snap.requests[index];
+            const input = part.speakTitle ? `${part.title}.\n\n${part.text}` : part.text;
+            LocalSpeech.play(input, part.voice, $('readerListenNote'), 'elevenlabs', part,
+                () => refreshRecordings(snap), () => {
+                    if (version !== playVersion || selected?.id !== snap.id) return;
+                    if (index + 1 < snap.requests.length) listenPart(snap, index + 1);
+                });
+        }
+    }
+    async function playSelected() {
+        selected = snapshot();
+        const index = Number(poemAudioPart.value) || 0;
+        if (selected.performance) await listenPart(selected, index);
+        else await startPlayback(selected, index);
+    }
     async function startPlayback(snap, index, autoPlay = true, resumeAt = 0) {
         const version = ++playVersion;
         LocalSpeech.stop();
         poemAudioPlayer.pause();
         if (!snap.availability[index]?.url) await refreshAvailability(snap);
         if (version !== playVersion) return;
+        snap.audioDurations ||= {};
         playback = { ...snap, index }; updateDock();
         const part = snap.availability[index];
         if (!part?.url) {
@@ -572,6 +728,90 @@ window.Reader = (() => {
         if (!poemAudioPlayer.getAttribute('src')) return;
         try { await poemAudioPlayer.play(); } catch { $('readerPlayerStatus').textContent = 'Press Play to start this recording.'; }
     }
+    function updateTransportControls() {
+        const button = $('readerTransport');
+        if (!button) return;
+        const state = LocalSpeech.state;
+        const paused = state === 'paused' || (state === 'idle' && poemAudioPlayer.paused);
+        button.textContent = paused ? 'Continue' : 'Pause';
+        button.setAttribute('aria-label', paused ? 'Continue narration' : 'Pause narration');
+        button.disabled = state === 'idle' && !poemAudioPlayer.getAttribute('src');
+    }
+    async function togglePlaybackPause() {
+        if (LocalSpeech.state === 'playing') await LocalSpeech.pause();
+        else if (LocalSpeech.state === 'paused') await LocalSpeech.resume();
+        else if (poemAudioPlayer.getAttribute('src')) {
+            if (poemAudioPlayer.paused) await safePlay();
+            else { poemAudioPlayer.pause(); persistPlayback(); }
+        }
+        updateTransportControls();
+    }
+    function scenePlaybackPercent(snap, index, percent) {
+        if (percent === null) return null;
+        const weights = snap.requests.map(part => Math.max(1, (part.text || '').length));
+        const total = weights.reduce((sum, weight) => sum + weight, 0);
+        const before = weights.slice(0, index).reduce((sum, weight) => sum + weight, 0);
+        return Math.min(100, Math.floor(100 * (before + weights[index] * Math.max(0, Math.min(100, percent)) / 100) / total));
+    }
+    function playingCueLabel(snap, index) {
+        if (!snap || index < 0 || index >= snap.requests.length) return '';
+        const part = snap.requests[index];
+        return `${snap.performance ? 'Cue' : 'Part'} ${index + 1} of ${snap.requests.length}`
+            + (part.speaker ? ` · ${part.speaker}` : '');
+    }
+    function playbackTimeEstimate(snap, index, percent, timing = null) {
+        if (!snap || !(index >= 0 && index < snap.requests.length) || percent === null) return '';
+        const words = snap.requests.map(part => Math.max(1, (part.text || '').trim().split(/\s+/).filter(Boolean).length));
+        const known = snap.audioDurations ||= {};
+        if (Number.isFinite(timing?.duration) && timing.duration > 0) known[index] = timing.duration;
+        const measured = Object.keys(known).filter(key => words[key] && known[key] > 0);
+        const secondsPerWord = measured.length
+            ? measured.reduce((sum, key) => sum + known[key], 0) / measured.reduce((sum, key) => sum + words[key], 0)
+            : 60 / 150;
+        const durations = words.map((count, i) => known[i] || count * secondsPerWord);
+        const fraction = Math.max(0, Math.min(1, percent / 100));
+        const rate = Number.isFinite(timing?.rate) && timing.rate > 0 ? timing.rate : 1;
+        const current = Number.isFinite(timing?.elapsed) && timing.elapsed >= 0
+            ? Math.min(durations[index], timing.elapsed) : durations[index] * fraction;
+        const elapsed = (durations.slice(0, index).reduce((sum, value) => sum + value, 0) + current) / rate;
+        const remaining = (durations[index] - current + durations.slice(index + 1).reduce((sum, value) => sum + value, 0)) / rate;
+        const clock = value => {
+            const seconds = Math.max(0, Math.round(value));
+            return seconds >= 3600
+                ? `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+                : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+        };
+        const approximate = measured.length < words.length;
+        return `${approximate ? '~' : ''}${clock(elapsed)} elapsed · ${approximate ? '~' : ''}${clock(remaining)} remaining`;
+    }
+    function updatePlaybackProgress(percent, recording = null, timing = null) {
+        let snap = playback, index = playback?.index;
+        if (recording) {
+            snap = selected;
+            index = snap?.requests.findIndex(part => part === recording
+                || (part.title === recording.title && part.text === recording.text && part.voice === recording.voice));
+        }
+        const timeOutput = $('readerPlaybackTime');
+        if (timeOutput) timeOutput.textContent = playbackTimeEstimate(snap, index, percent, timing);
+        const currentCue = $('readerCurrentCue');
+        if (currentCue) currentCue.textContent = playingCueLabel(snap, index);
+        const whole = snap && index >= 0 && index < snap.requests.length
+            ? scenePlaybackPercent(snap, index, percent) : percent;
+        const label = whole === null ? 'Loading progress…'
+            : `${whole}% complete${snap?.performance ? ' · scene' : snap?.requests.length > 1 ? ' · whole text' : ''}`;
+        for (const id of ['readerAlwaysProgress', 'readerPlaybackPercent']) {
+            const output = $(id);
+            if (output) output.textContent = label;
+        }
+        return label;
+    }
+    function rewindPlayback() {
+        if (LocalSpeech.state !== 'idle') { LocalSpeech.rewind(15); return; }
+        if (!poemAudioPlayer.getAttribute('src')) return;
+        poemAudioPlayer.currentTime = Math.max(0, poemAudioPlayer.currentTime - 15);
+        updateReadingPosition();
+        persistPlayback();
+    }
     function stepPlayback(direction) {
         if (!playback) return;
         const index = playback.index + direction;
@@ -579,12 +819,18 @@ window.Reader = (() => {
     }
     function ended() {
         if (!playback) return;
-        if (playback.index + 1 < playback.requests.length) stepPlayback(1);
-        else { $('readerPlayerStatus').textContent = 'Reading finished.'; updateDock(); persistPlayback(); }
+        // Flush the outgoing part while its identity is still active. The final
+        // timeupdate may arrive too late, after the next source has been loaded.
+        updateReadingPosition();
+        if (playback.index + 1 < playback.requests.length) {
+            if (playback.continuousListen) listenPart(playback, playback.index + 1);
+            else stepPlayback(1);
+        } else { $('readerPlayerStatus').textContent = 'Reading finished.'; updateDock(); persistPlayback(); }
     }
     function closePlayer() {
         ++playVersion;
         playback = null;
+        $('readerCurrentCue').textContent = '';
         poemAudioPlayer.pause();
         poemAudioPlayer.removeAttribute('src');
         poemAudioPlayer.load();
@@ -597,14 +843,16 @@ window.Reader = (() => {
         if (!playback) return;
         $('readerPlayer').hidden = false; document.body.classList.add('reader-has-player');
         $('readerPlayingTitle').textContent = playback.poem.title;
-        $('readerPlayingDetail').textContent = `${playback.book.name} · ${ttsVoiceName(playback.voice, playback.provider)} · Part ${playback.index + 1} of ${playback.requests.length}`;
+        const cueLabel = playingCueLabel(playback, playback.index);
+        $('readerCurrentCue').textContent = cueLabel;
+        $('readerPlayingDetail').textContent = `${playback.book.name} · ${cueLabel}`;
         $('readerPlayPause').textContent = poemAudioPlayer.paused ? 'Play' : 'Pause';
         $('readerPrevPart').disabled = playback.index === 0; $('readerNextPart').disabled = playback.index >= playback.requests.length - 1;
     }
     function persistPlayback() {
         if (!playback) return;
         lastPlaybackSave = Date.now();
-        write('playback', { book: playback.book.id, entry: getPoemId(playback.poem), voice: playback.voice, provider: playback.provider, model: playback.model, requests: playback.requests, browserKeys: playback.browserKeys, index: playback.index, time: poemAudioPlayer.currentTime || 0, urls: playback.external ? playback.availability.map(p => p.url?.startsWith('/') ? p.url : null) : undefined });
+        write('playback', { book: playback.book.id, entry: getPoemId(playback.poem), voice: playback.voice, provider: playback.provider, model: playback.model, requests: playback.requests, browserKeys: playback.browserKeys, performance: Boolean(playback.performance), continuousListen: Boolean(playback.continuousListen), index: playback.index, time: poemAudioPlayer.currentTime || 0, urls: playback.external ? playback.availability.map(p => p.url?.startsWith('/') ? p.url : null) : undefined });
     }
     async function restorePlayback() {
         const restoreVersion = playVersion;
@@ -613,13 +861,22 @@ window.Reader = (() => {
         try {
             const poems = book.id === currentBook?.id ? allPoems : book.userPoems ? await loadUserPoems() : await fetchJson(book.poems);
             const poem = poems.find(p => getPoemId(p) === saved.entry); if (!poem || playVersion !== restoreVersion) return;
-            const snap = { id: `${entryKey(book, poem)}:${saved.provider}:${saved.model}:${saved.voice}`, poem, book, provider: saved.provider, model: saved.model, voice: saved.voice, requests: saved.requests, browserKeys: saved.browserKeys || [], availability: saved.requests.map((_, i) => ({ state: saved.urls?.[i] ? 'saved' : 'checking', url: saved.urls?.[i] || null })), external: Boolean(saved.urls) };
+            const snap = { id: `${entryKey(book, poem)}:${saved.provider}:${saved.model}:${saved.voice}`, poem, book, provider: saved.provider, model: saved.model, voice: saved.voice, requests: saved.requests, browserKeys: saved.browserKeys || [], availability: saved.requests.map((_, i) => ({ state: saved.urls?.[i] ? 'saved' : 'checking', url: saved.urls?.[i] || null })), external: Boolean(saved.urls), performance: Boolean(saved.performance), continuousListen: Boolean(saved.continuousListen) };
             if (snap.external && snap.availability.every(p => !p.url)) return;
+            if (snap.performance && currentBook?.id === book.id && currentPoem && getPoemId(currentPoem) === saved.entry) {
+                performanceMode = true; syncAudio(); snap.id = selected.id;
+            }
             await startPlayback(snap, Math.max(0, Math.min(saved.index || 0, snap.requests.length - 1)), false, saved.time || 0);
         } catch { /* Stale or offline history must not prevent reading. */ }
     }
     function playExternal(url, label = 'Saved recording', urls = null) {
         if (!currentPoem || !currentBook) return;
+        // A saved character cue belongs to the performance, so keep its cast
+        // and the remaining cues instead of treating it as a complete scene.
+        if (!urls?.length && selected?.performance) {
+            const index = selected.availability.findIndex(part => part.url === url);
+            if (index >= 0) return listenPart(selected, index);
+        }
         const list = urls?.length ? urls : [url];
         const snap = { id: `${entryKey(currentBook, currentPoem)}:recording`, poem: currentPoem, book: currentBook, voice: label, provider: 'recording', model: '', requests: list.map(() => ({})), browserKeys: [], availability: list.map(url => ({ state: 'saved', url })), external: true };
         startPlayback(snap, Math.max(0, list.indexOf(url)));
@@ -718,7 +975,7 @@ window.Reader = (() => {
                 $('readerDuplicateMessage').textContent = (unknown
                     ? 'The shared library could not be checked. Generating now could repeat audio you already have. '
                     : `“${snap.poem.title}” already has ${snap.recordings.length} saved recording${snap.recordings.length === 1 ? '' : 's'}. Some or all of the requested text may already be recorded, including versions with different part boundaries. `)
-                    + `You selected ${ttsVoiceName(snap.voice, snap.provider)} · ${snap.provider === 'gemini' ? snap.model : 'Local narration'}, part${end - start > 1 ? 's' : ''} ${start + 1}${end - start > 1 ? `–${end}` : ''}. Creating another version will generate new audio${snap.provider === 'gemini' ? ' and may incur charges' : ''}.`;
+                    + `You selected ${ttsVoiceName(snap.voice, snap.provider)} · ${snap.provider === 'elevenlabs' ? 'ElevenLabs · Multilingual v2' : snap.provider === 'gemini' ? snap.model : 'Local narration'}, part${end - start > 1 ? 's' : ''} ${start + 1}${end - start > 1 ? `–${end}` : ''}. Creating another version will generate new audio${snap.provider === 'gemini' ? ' and may incur charges' : ''}.`;
                 $('readerDuplicateVersions').replaceChildren(...(snap.recordings || []).map(record => node('li', '', record.filename.replace(/\.wav$/i, '') + (record.model ? ` · ${record.model}` : ''))));
                 $('readerDuplicateSaved').hidden = !snap.recordings?.length;
                 $('readerDuplicateContinue').textContent = unknown ? 'Generate without checking' : 'Generate another version';
@@ -792,7 +1049,8 @@ window.Reader = (() => {
         generateAudio.textContent = `Generate part ${i + 1}`;
         generateAllAudio.textContent = `Generate missing parts ${i + 1}–${selected.requests.length}`;
         playAllAudio.textContent = `Play part ${i + 1} to end`;
-        generateAllAudio.hidden = playAllAudio.hidden = stitchChapterAudio.hidden = selected.requests.length <= 1;
+        generateAllAudio.hidden = playAllAudio.hidden = selected.requests.length <= 1;
+        stitchChapterAudio.hidden = selected.performance || selected.requests.length <= 1;
         ttsProvider.disabled = geminiTtsModel.disabled = poemVoice.disabled = poemAudioPart.disabled = false;
         playCompleteChapter.hidden = downloadCompleteChapter.hidden = !selected.completeUrl;
         if (selected.completeUrl) {
@@ -824,6 +1082,12 @@ window.Reader = (() => {
             }).catch(() => { snap.checkedComplete = false; });
         }
     }
+    function performanceFollowRequest() {
+        // Saved narration may use different boundaries from the displayed text.
+        // Align using the actual spoken request, including after a part change.
+        const request = playback && matchesPlaying() ? playback.requests[playback.index] : null;
+        return request?.text ? request : null;
+    }
     function readingFollowPart() {
         if (!playback) return Number(poemAudioPart.value) || 0;
         if (!currentPoem || currentBook?.id !== playback.book.id
@@ -835,8 +1099,8 @@ window.Reader = (() => {
     }
     function matchesPlaying() { return readingFollowPart() !== undefined; }
     document.addEventListener('DOMContentLoaded', install);
-    return { boot, beforeOpen, opened, closed, savePosition, renderContents, beforeBook, bookSelected, updatePanelSemantics, syncAudio, renderAudio,
-        playSelected, playExternal, ended, matchesPlaying, readingFollowPart, generateSelected, rememberComplete, playComplete, capture: () => snapshot(),
+    return { updatePlaybackProgress, boot, beforeOpen, opened, closed, savePosition, renderContents, beforeBook, bookSelected, updatePanelSemantics, syncAudio, renderAudio,
+        playSelected, playExternal, ended, matchesPlaying, readingFollowPart, performanceFollowRequest, generateSelected, rememberComplete, playComplete, capture: () => snapshot(),
         get active() { return ready; }, get preview() { return preview; },
         // Pure state projection is also used by the regression checks.
         partState };

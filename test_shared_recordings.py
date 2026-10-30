@@ -46,6 +46,24 @@ class SharedRecordingsTests(unittest.TestCase):
             record(8, prefix + ' - Complete chapter.wav')
             self.assertEqual(len(self.discover({'book': 'sherlock-holmes', 'title': title})[1]['recordings']), 4)
 
+    def test_perry_forewords_require_book_metadata(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(server, 'AUDIO_LIBRARY_PATH', Path(directory)):
+            for index, metadata in enumerate([
+                {},
+                {'book': 'new-england-mind', 'entryTitle': 'Foreword', 'kind': 'poem'},
+                {'book': 'colony-to-province', 'entryTitle': 'Foreword', 'kind': 'poem'},
+                {'book': None, 'entryTitle': 'Foreword', 'kind': 'poem'},
+            ]):
+                key = f'{index:064x}'
+                (Path(directory) / f'{key}.json').write_text(json.dumps({
+                    'filename': 'Perry Miller - Foreword - Part 1 - Local voice 1.wav', **metadata}))
+                (Path(directory) / f'{key}.wav').touch()
+            for index, book in enumerate(['new-england-mind', 'colony-to-province'], 1):
+                code, payload = self.discover({'book': book, 'title': 'Foreword'})
+                self.assertEqual(code, 200)
+                self.assertEqual(len(payload['recordings']), 1)
+                self.assertIn(f'{index:064x}', payload['recordings'][0]['url'])
+
     def test_metadata_survives_cached_audio_reuse(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(server, 'AUDIO_LIBRARY_PATH', Path(directory)):
             key = 'a' * 64

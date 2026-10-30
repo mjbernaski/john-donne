@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import elevenlabs_catalog
 import base64
 import binascii
 import copy
@@ -72,6 +73,30 @@ VLLM_FALLBACK_URL = os.environ.get("VLLM_FALLBACK_URL", UPSTREAMS.get("vllm_fall
 TTS_BASE_URL = os.environ.get("TTS_BASE_URL", UPSTREAMS.get("tts", "http://mjbmini.local:7860")).rstrip("/")
 FLUX_API_KEY = os.environ.get("FLUX_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+ELEVENLABS_MODEL = "eleven_multilingual_v2"
+ELEVENLABS_VOICES = {
+    "feminine": "21m00Tcm4TlvDq8ikWAM",
+    "masculine": os.environ.get("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb"),
+    "companion": "pNInz6obpgDQGcFmaJgB",
+    "charlie": "IKne3meq5aSn9XLyUdCD",
+    "callum": "N2lVS1w4EtoT3dr4eOWO",
+    "river": "SAz9YHcvj6GT2YYXdXww",
+    "harry": "SOYHLrjzK2X1ezoPC6cr",
+    "alice": "Xb7hH8MSUJpSbSDYk0k2",
+    "brian": "nPczCjzI2devNBz1zQrb",
+    "daniel": "onwK4e9ZLuTAKqWW03F9",
+    "lily": "pFZP5JQG7iQjIQuC4Bku",
+    "bill": "pqHfZKP75CvOlQylNhV4",
+}
+
+
+def resolve_tts_voice(voice: str, provider: str) -> str | None:
+    if provider == "elevenlabs":
+        return ELEVENLABS_VOICES.get(voice) or elevenlabs_catalog.resolve_voice(ELEVENLABS_API_KEY, voice)
+    return resolve_gemini_voice(voice) if provider == "gemini" else resolve_local_voice(voice)
+
+
 LOCAL_TTS_MODEL = "Qwen3-TTS"
 DEFAULT_GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 GEMINI_TTS_PIPELINE_VERSION = 2
@@ -145,7 +170,7 @@ def tts_provider_error(error: HTTPError, api_key: str = "") -> str:
             message = "Gemini declined this passage (content_blocked): " + message
     except (ValueError, OSError):
         pass
-    for secret in (api_key, GEMINI_API_KEY):
+    for secret in (api_key, GEMINI_API_KEY, ELEVENLABS_API_KEY):
         if secret:
             message = message.replace(secret, "[redacted]")
     message = re.sub(r"AIza[\w-]+", "[redacted]", message)
@@ -175,7 +200,7 @@ NEGATIVE_PROMPT = (
     "nudity, nude figure, bare chest, exposed breasts, exposed genitals, topless, "
     "underwear, explicit sexual activity, pornography, graphic violence, gore, blood, "
     "two men as a romantic couple, two women as a romantic couple, "
-    "text, lettering, caption, title, signature, watermark, typography, written words"
+    "text, letters, numbers, lettering, labels, caption, title, signature, artist signature, watermark, stock photo watermark, logo, branding, typography, written words, subtitles, interface overlay"
 )
 # A refusal is only remembered for a while: the image host restarts independently
 # of this server, so a build that rejects the field can be replaced by one that
@@ -300,7 +325,7 @@ def audio_library_key(
 ) -> str:
     """Identify the exact performance request across browsers and server restarts."""
     identity = {
-        "model": model if provider == "gemini" else LOCAL_TTS_MODEL,
+        "model": model if provider != "local" else LOCAL_TTS_MODEL,
         "title": title,
         "text": text,
         "voice": voice,
@@ -309,7 +334,7 @@ def audio_library_key(
     }
     # Keep the existing local-Qwen library addressable. Gemini is already
     # separated by its model name, and naming the provider makes that explicit.
-    if provider == "gemini":
+    if provider != "local":
         identity["provider"] = provider
         # Generation settings affect whether a reading is complete. Bump this
         # when those settings change so an older, truncated render is not reused.
@@ -320,9 +345,9 @@ def audio_library_key(
     # wise keep serving readings performed by the voice it used to point at. Name
     # the voice as well, but only once it stops being that role's default, so the
     # library built up under the defaults stays addressable.
-    resolved = GEMINI_TTS_VOICES.get(voice) if provider == "gemini" else resolve_local_voice(voice)
-    defaults = GEMINI_TTS_VOICES if provider == "gemini" else DEFAULT_TTS_VOICES
-    if resolved and resolved != defaults.get(voice):
+    resolved = resolve_tts_voice(voice, provider)
+    defaults = ELEVENLABS_VOICES if provider == "elevenlabs" else GEMINI_TTS_VOICES if provider == "gemini" else DEFAULT_TTS_VOICES
+    if resolved and (provider == "elevenlabs" or resolved != defaults.get(voice)):
         identity["voiceName"] = resolved
     return hashlib.sha256(
         json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -421,6 +446,15 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/voices.html"
             super().do_GET()
             return
+        if self.path == '/api/elevenlabs/catalog':
+            try:
+                self._send_json(200, elevenlabs_catalog.catalog(ELEVENLABS_API_KEY))
+            except (ValueError, URLError, TimeoutError) as error:
+                self._send_json(502, {'error': str(error) if isinstance(error, ValueError) else 'ElevenLabs is unavailable.'})
+            return
+        if self.path == '/api/elevenlabs/faust-scene':
+            self._send_json(200, elevenlabs_catalog.scene(BASE_DIR))
+            return
         if self.path == "/api/tts/voices":
             self._list_tts_voices()
             return
@@ -501,6 +535,28 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError('Provide an image record.')
             poem_id, filename = str(payload.get('poemId', '')), str(payload.get('filename', ''))
+            if filename.startswith('poem-images/assets/'):
+                caption = str(payload.get('caption', '')).strip()
+                if not re.fullmatch(r'[a-f0-9]{1,8}', poem_id) or not caption or len(caption) > 600:
+                    raise ValueError('Provide a poem identifier and a brief caption.')
+                with IMAGE_LIBRARY_LOCK:
+                    manifest = self._image_manifest()
+                    record = next((r for r in manifest.get(poem_id, []) if r.get('filename') == filename), None)
+                    if record is None:
+                        raise ValueError('Image is not in the shared library.')
+                    labels = payload.get('labels')
+                    if labels is not None:
+                        if not isinstance(labels, list) or len(labels) > 12 or any(
+                            not isinstance(label, dict) or not isinstance(label.get('name'), str)
+                            or not label['name'].strip() or len(label['name']) > 80
+                            or any(type(label.get(k)) not in (int, float) or not 0 <= label[k] <= 1
+                                   for k in ('x', 'y', 'targetX', 'targetY')) for label in labels):
+                            raise ValueError('Provide valid character labels and positions.')
+                        record.update(labels=labels, labelVersion='vision-labels-v1', nameLabels=True)
+                    record.update(caption=caption, captionVersion='vision-scene-v1')
+                    self._write_image_manifest(manifest)
+                self._send_json(200, {'image': record})
+                return
             if not re.fullmatch(r'[a-f0-9]{1,8}', poem_id) or not re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:png|jpg|jpeg|webp)', filename, re.I):
                 raise ValueError('Provide a poem identifier and an image filename.')
             identity = hashlib.sha256(f'{poem_id}:{filename}'.encode()).hexdigest()
@@ -526,7 +582,10 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 data = response.read(32 * 1024 * 1024 + 1)
                 if len(data) > 32 * 1024 * 1024:
                     raise ValueError('Image exceeds the shared library size limit.')
-            record = {k: str(payload.get(k, ''))[:12000] for k in ('prompt', 'style', 'poemTitle', 'collection')}
+            record = {k: str(payload.get(k, ''))[:12000] for k in ('prompt', 'style', 'poemTitle', 'collection', 'scene', 'sceneMode', 'caption', 'captionVersion')}
+            record.update(nameLabels=payload.get('nameLabels') is True)
+            if isinstance(payload.get('labels'), list):
+                record.update(labels=payload['labels'], labelVersion=payload.get('labelVersion', ''))
             record.update(filename=relative, originalFilename=filename, status='done')
             with IMAGE_LIBRARY_LOCK:
                 try:
@@ -726,6 +785,12 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
+        if self.path == '/api/elevenlabs/faust-audition':
+            try:
+                self._send_json(200, elevenlabs_catalog.audition(BASE_DIR, ELEVENLABS_API_KEY, self._read_json_body()))
+            except (ValueError, URLError, TimeoutError) as error:
+                self._send_json(400, {'error': str(error) if isinstance(error, ValueError) else 'ElevenLabs is unavailable.'})
+            return
         stop_match = re.fullmatch(r"/api/tts/jobs/([A-Za-z0-9_-]+)/cancel", self.path)
         if stop_match:
             with TTS_JOBS_LOCK:
@@ -747,6 +812,9 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
             return
         if self.path == "/api/tts/jobs":
             self._queue_tts()
+            return
+        if self.path == "/api/tts/stream/save":
+            self._save_streamed_tts()
             return
         if self.path == "/api/tts/stream":
             self._stream_local_tts()
@@ -881,14 +949,18 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         text = str(payload.get("text", "")).strip()
         voice_id = str(payload.get("voice", ""))
         provider = str(payload.get("provider", "local")).strip().lower()
-        if provider not in {"local", "gemini"}:
-            raise ValueError("provider must be local or gemini.")
+        if provider not in {"local", "gemini", "elevenlabs"}:
+            raise ValueError("provider must be local, gemini, or elevenlabs.")
         model = str(payload.get("model", DEFAULT_GEMINI_TTS_MODEL)).strip()
         if provider == "gemini" and model not in GEMINI_TTS_MODELS:
             raise ValueError("That Gemini TTS model is not supported.")
+        if provider == "elevenlabs":
+            model = str(payload.get("model") or ELEVENLABS_MODEL)
+            if model not in {ELEVENLABS_MODEL, "eleven_flash_v2_5"}:
+                raise ValueError("That ElevenLabs TTS model is not supported.")
         if provider == "local":
             model = LOCAL_TTS_MODEL
-        voice = resolve_gemini_voice(voice_id) if provider == "gemini" else resolve_local_voice(voice_id)
+        voice = resolve_tts_voice(voice_id, provider)
         kind = str(payload.get("kind", "poem"))
         speak_title = payload.get("speakTitle", True) is not False
         if not title or not text or not voice or kind not in {"poem", "response"}:
@@ -950,6 +1022,19 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 value = value.replace('‘', "'").replace('’', "'").replace('“', '').replace('”', '')
                 return re.sub(r'\s+', ' ', value).strip()
             legacy_prefix = clean(f"{browser_clean(book.get('poet') or book.get('name'))} - {browser_clean(title)[:70].rstrip('. ')}")
+            # A filename alone cannot identify shared entry names across books.
+            legacy_unambiguous = True
+            author = book.get('poet') or book.get('name')
+            for other in BOOKS:
+                if other.get('id') == book['id'] or (other.get('poet') or other.get('name')) != author:
+                    continue
+                try:
+                    entries = json.loads((BASE_DIR / other['poems']).read_text(encoding='utf-8'))
+                    if any(entry.get('title') == title for entry in entries):
+                        legacy_unambiguous = False
+                        break
+                except (OSError, ValueError, KeyError):
+                    legacy_unambiguous = False
             recordings = []
             for path in AUDIO_LIBRARY_PATH.glob('*.json'):
                 if not re.fullmatch(r'[a-f0-9]{64}', path.stem):
@@ -966,7 +1051,7 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                                and record.get('kind') == 'poem')
                 else:
                     # Older caches only recorded the human-readable filename.
-                    matches = any(filename.startswith(p + ' - ') or filename == p + '.wav'
+                    matches = legacy_unambiguous and any(filename.startswith(p + ' - ') or filename == p + '.wav'
                                   for p in (prefix, legacy_prefix))
                     if ' - commentary - ' in filename:
                         matches = False
@@ -1119,10 +1204,13 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
         existing = self._library_audio(key, filename)
         if existing:
             return (*existing, True)
-        voice = resolve_gemini_voice(voice_id) if provider == "gemini" else resolve_local_voice(voice_id)
+        voice = resolve_tts_voice(voice_id, provider)
         pcm_chunks = []
-        audio_format = (1, 2, 24000) if provider == "gemini" else None
-        chunks = self._split_tts_text(text, self._narration_part_limit(title, book, provider))
+        audio_format = (1, 2, 24000) if provider != "local" else None
+        # A reader part can exceed Qwen's audio output budget. Generate short
+        # internal chunks and join them while retaining the reader's part IDs.
+        generation_limit = 4500 if provider == "elevenlabs" else self._narration_part_limit(title, book, provider) if provider == "gemini" else 850
+        chunks = self._split_tts_text(text, generation_limit)
         for index, chunk in enumerate(chunks):
             self._tts_progress(stage="generating", chunk=index + 1, chunks=len(chunks), attempt=1, retryAt=None)
             transcript = (
@@ -1130,7 +1218,9 @@ class PoetryRequestHandler(SimpleHTTPRequestHandler):
                 if kind == "poem" and speak_title and index == 0
                 else chunk
             )
-            if provider == "gemini":
+            if provider == "elevenlabs":
+                pcm_chunks.append(self._request_elevenlabs_audio(transcript, voice, model))
+            elif provider == "gemini":
                 if model.startswith("gemini-3.8-"):
                     pcm_chunks.append(self._request_gemini_38_audio(api_key, voice, transcript, str(book.get("readingNotes", "Measured and natural.")), model))
                 else:
@@ -1399,15 +1489,63 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
             pcm = response.read()
         if not pcm or len(pcm) % 2:
             raise ValueError("Local TTS returned incomplete PCM audio.")
+        # Qwen can end successfully at its observed audio output ceiling while
+        # still omitting the rest of the transcript.
+        if len(pcm) >= 15728640:
+            raise ValueError("Local TTS reached its audio output limit; this recording may be incomplete and was not saved.")
         output = io.BytesIO()
         with wave.open(output, "wb") as audio:
             audio.setparams((1, 2, 24000, 0, "NONE", "not compressed"))
             audio.writeframes(pcm)
         return output.getvalue()
 
+    def _save_streamed_tts(self) -> None:
+        """Persist a complete streamed PCM reading under its actual model identity."""
+        try:
+            payload = self._read_json_body()
+            title, text, voice, kind, provider, _, speak_title, book, _, filename = self._tts_request(payload)
+            if provider not in {"local", "elevenlabs"}:
+                raise ValueError("Unsupported streaming provider.")
+            model = "eleven_flash_v2_5" if provider == "elevenlabs" else LOCAL_TTS_MODEL
+            pcm = base64.b64decode(payload.get("pcm", ""), validate=True)
+            if not pcm or len(pcm) % 2:
+                raise ValueError("Streamed audio must contain complete PCM samples.")
+            output = io.BytesIO()
+            with wave.open(output, "wb") as audio:
+                audio.setparams((1, 2, 24000, 0, "NONE", "not compressed"))
+                audio.writeframes(pcm)
+            key = audio_library_key(title, text, voice, kind, book['id'], speak_title, provider, model)
+            url = cache_audio(filename, output.getvalue(), key, {
+                'book': book['id'], 'entryTitle': re.sub(r' · Part \d+$', '', title),
+                'kind': kind, 'provider': provider, 'model': model, 'voice': voice,
+            })
+            self._send_json(200, {'url': url, 'model': model})
+        except (ValueError, binascii.Error, json.JSONDecodeError) as error:
+            self._send_json(400, {'error': str(error)})
+
     def _stream_local_tts(self) -> None:
         try:
             payload = self._read_json_body()
+            provider = str(payload.get("provider", "local"))
+            if provider not in {"local", "elevenlabs"}:
+                raise ValueError("Streaming supports local or elevenlabs speech.")
+            if provider == "elevenlabs":
+                if not ELEVENLABS_API_KEY:
+                    raise ValueError("An ElevenLabs API key is required on the server.")
+                text = str(payload.get("input", "")).strip()
+                if not text or len(text) > 4500:
+                    raise ValueError("Streaming text must contain 1–4500 characters.")
+                voice = resolve_tts_voice(str(payload.get("voice", "masculine")), provider)
+                if not voice:
+                    raise ValueError("Choose a supported ElevenLabs voice.")
+                request = Request(
+                    f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice, safe='')}/stream?output_format=pcm_24000",
+                    data=json.dumps({"text": text, "model_id": "eleven_flash_v2_5"}).encode("utf-8"),
+                    headers={"Content-Type": "application/json", "xi-api-key": ELEVENLABS_API_KEY},
+                )
+                with urlopen(request, timeout=120) as response:
+                    self._stream_proxy_response(response)
+                return
             voice = str(payload.get("voice", "ryan")).lower()
             voice = load_tts_voices().get(voice, voice)
             fmt = str(payload.get("response_format", "pcm"))
@@ -1419,9 +1557,32 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
         except (ValueError, json.JSONDecodeError) as error:
             self._send_json(400, {"error": str(error)})
         except HTTPError as error:
-            self._send_json(error.code, {"error": "Local speech request was rejected."})
+            self._send_json(error.code, {"error": "Speech streaming request was rejected."})
         except (URLError, TimeoutError) as error:
-            self._send_json(502, {"error": "Local speech service is unavailable."})
+            self._send_json(502, {"error": "Speech streaming service is unavailable."})
+
+    def _request_elevenlabs_audio(self, text: str, voice: str, model: str = ELEVENLABS_MODEL) -> bytes:
+        if not ELEVENLABS_API_KEY:
+            raise ValueError("An ElevenLabs API key is required on the server.")
+        request = Request(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice, safe='')}?output_format=pcm_24000",
+            data=json.dumps({"text": text, "model_id": model}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "xi-api-key": ELEVENLABS_API_KEY},
+        )
+        try:
+            with urlopen(request, timeout=120) as response:
+                pcm = response.read()
+        except HTTPError as error:
+            try:
+                detail = json.loads(error.read()).get("detail", {})
+                message = detail.get("message", "") if isinstance(detail, dict) else str(detail)
+            except (ValueError, OSError):
+                message = ""
+            message = message.replace(ELEVENLABS_API_KEY, "[redacted]")[:500]
+            raise TTSGenerationError(f"ElevenLabs returned HTTP {error.code}: {message}") from None
+        if not pcm or len(pcm) % 2:
+            raise TTSGenerationError("ElevenLabs returned incomplete PCM audio.")
+        return pcm
 
     def _request_gemini_38_audio(self, api_key: str, voice: str, transcript: str, style: str, model: str) -> bytes:
         # 3.8 speaks the transcript verbatim; directions belong in metadata.
@@ -1494,10 +1655,16 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
             finish_reason = candidate.get("finishReason", "unknown")
             if finish_reason == "MAX_TOKENS":
                 raise TTSGenerationError("Gemini exhausted its audio output budget before finishing the text.")
-            if payload.get("promptFeedback", {}).get("blockReason") or finish_reason in {
+            block_reason = payload.get("promptFeedback", {}).get("blockReason")
+            if block_reason or finish_reason in {
                 "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "RECITATION", "SPII",
             }:
-                raise TTSGenerationError("Gemini declined to narrate this passage. Try a different provider.")
+                reason = str(block_reason or finish_reason)
+                raise TTSGenerationError(
+                    f"Gemini declined this passage ({reason}). This is a content restriction, "
+                    "not an insufficient-credit error. Your saved recordings are kept. "
+                    "Use local narration to read this passage."
+                )
             parts = candidate.get("content", {}).get("parts", [])
             audio_part = next((part.get("inlineData") for part in parts if part.get("inlineData")), None)
             if not audio_part or not audio_part.get("data"):
@@ -1584,7 +1751,13 @@ TRANSCRIPT — SPEAK ONLY THE TEXT BELOW
             self._send_json(400, {"success": False, "error": "The generation request was not valid JSON."})
             return
 
+        payload.setdefault("size", "0.5mp")
+        name_labels = payload.pop("character_name_labels", False) is True
         negative = str(payload.get("negative_prompt") or "").strip() or NEGATIVE_PROMPT
+        if name_labels:
+            # Keep all other exclusions while allowing character name lettering.
+            allowed_text = {'text', 'letters', 'lettering', 'labels', 'caption', 'title', 'typography', 'written words', 'subtitles'}
+            negative = ', '.join(term.strip() for term in negative.split(',') if term.strip() not in allowed_text)
         sdxl = flux_supports_negative_prompt()
         payload = {**payload, "negative_prompt": negative if sdxl else None}
         status, headers, response = self._flux_upstream(payload)

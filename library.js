@@ -41,6 +41,12 @@ function render() {
             edition.append(document.createTextNode(' · Opens in a new tab'));
         }
         card.append(label, title, byline, edition, link);
+        if (book.format !== 'PDF') {
+            const discuss = element('a', 'library-open', book.chapterCollection ? 'Discuss entire work' : 'Discuss collection');
+            discuss.href = `index.html?book=${encodeURIComponent(book.id)}&discuss=collection`;
+            discuss.setAttribute('aria-label', `Discuss: ${book.title}`);
+            card.appendChild(discuss);
+        }
         grid.appendChild(card);
     }
     status.textContent = visible.length ? `${visible.length} of ${books.length} titles` : 'No titles match. Try another search or category.';

@@ -48,10 +48,12 @@ async function run() {
         return route.fulfill({ json: { id: 'ui-test', state: polls < 3 ? 'running' : 'failed', total: 2, completed: 1, reused: 0, part: 2, stage: 'retrying', attempt: 1, maxAttempts: 4, retryAt: Date.now() / 1000 + 15, retryReason: 'Rate limit', error: 'Stopped at part 2 of 2. Resume missing parts.' } });
     });
     const base = `http://127.0.0.1:${port}`;
+    await context.addInitScript(() => localStorage.setItem('reading-room-v1:preview', 'false'));
     await page.goto(base + '/library.html');
     await page.waitForFunction(() => window.Reader?.active);
     assert(await page.locator('#readerLibrary').isVisible());
-    await page.locator('.reader-shell-bar [data-reader-preview]').check();
+    assert(await page.locator('body').evaluate(el => el.classList.contains('reader-preview')));
+    assert.equal(await page.locator('[data-reader-preview]').count(), 0);
     await page.locator('.library-card').filter({ hasText: 'The Complete Sherlock Holmes' }).locator('.library-open').click();
     await page.waitForSelector('.reader-contents-section');
     assert.equal(await page.locator('.reader-contents-section').count(), 9);
@@ -91,6 +93,8 @@ async function run() {
     await page.locator('#closeModal').click();
     await page.locator('.reader-shell-bar > a').click();
     assert(await page.locator('#readerLibrary').isVisible());
+    assert(await page.locator('body').evaluate(el => el.classList.contains('reader-preview')));
+    assert.equal(await page.locator('[data-reader-preview]').count(), 0);
     assert(await page.evaluate(() => !document.getElementById('poemAudioPlayer').paused));
     await page.locator('#readerReturn').click();
     await page.waitForSelector('#poemModal.show');
@@ -119,9 +123,6 @@ async function run() {
     assert.match(await page.locator('#readerGenerationCounts').textContent(), /0 done · 1 underway · 1 queued/);
     assert.equal(await page.locator('#readerGenerationDots [data-state="generating"]').getAttribute('aria-label'), 'Part 3: underway');
     assert.equal(await page.locator('#readerGenerationDots [data-state="queued"]').textContent(), '4');
-    await page.locator('.reader-shell-bar [data-reader-preview]').uncheck();
-    assert(await page.locator('#readerGenerationProgress').isVisible(), 'Progress is visible without the new reader');
-    await page.locator('.reader-shell-bar [data-reader-preview]').check();
     await page.waitForFunction(() => document.getElementById('poemAudioStatus').textContent.includes('Part 4 · Rate limit'));
     assert.match(await page.locator('#readerGenerationCounts').textContent(), /1 done · 1 underway · 0 queued/);
     assert.equal(await page.locator('#readerGenerationMeter').getAttribute('value'), '1');
@@ -162,17 +163,30 @@ async function run() {
     const tabs = await page.locator('.modal-tabs').boundingBox();
     assert(tabs.y >= 64 && tabs.y < 130, 'Mobile tabs stay at the top, clear of the player');
     await page.screenshot({ path: '/tmp/reader-mobile.png', fullPage: false });
+    await page.locator('#discussTab').click();
+    await page.locator('#chatInput').focus();
+    // iOS reduces the visual viewport while retaining the layout viewport.
+    await page.evaluate(() => {
+        Object.defineProperty(visualViewport, 'height', { configurable: true, value: 340 });
+        Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 35 });
+        visualViewport.dispatchEvent(new Event('resize'));
+        visualViewport.dispatchEvent(new Event('scroll'));
+    });
+    await page.locator('#chatInput').fill('Visible above the keyboard');
+    const composer = await page.locator('#chatInput').boundingBox();
+    assert(composer.y >= 35 && composer.y + composer.height <= 375, 'Composer stays inside the keyboard-reduced visual viewport with an audio player');
+    assert.equal(await page.locator('#chatInput').evaluate(el => getComputedStyle(el).fontSize), '16px');
+    await page.evaluate(() => {
+        document.getElementById('chatInput').blur();
+        delete visualViewport.height;
+        delete visualViewport.offsetTop;
+        visualViewport.dispatchEvent(new Event('resize'));
+    });
+    assert(await page.locator('.chat-header').isVisible(), 'Discussion controls return after typing');
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.locator('#discussTab').click();
     await page.screenshot({ path: '/tmp/reader-desktop.png', fullPage: false });
     // Reload keeps the preferences and restores paused, without a paid request.
-    // Switching the presentation preserves the playing recording.
-    const sourceBeforeToggle = await page.locator('#poemAudioPlayer').getAttribute('src');
-    await page.locator('.reader-shell-bar [data-reader-preview]').uncheck();
-    assert.equal(await page.locator('#poemAudioPlayer').getAttribute('src'), sourceBeforeToggle);
-    await page.locator('#readTab').click();
-    assert(await page.locator('#generateAllAudio').isVisible());
-    await page.locator('.reader-shell-bar [data-reader-preview]').check();
     failAvailability = false; saved = true;
     const submittedBeforeReload = submits;
     await page.reload();

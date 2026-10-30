@@ -46,6 +46,19 @@ STYLES = [
     ("Retro science fiction", "Retro-futurist 1950s science-fiction paperback cover aesthetic with cosmic scale, airbrushed celestial forms, bold dramatic lighting, aged printing texture, and no title or lettering."),
     ("Embroidery", "Elaborate hand-embroidered textile image with visible silk and metallic threads, varied stitches, dimensional knots, fabric grain, and symbolic motifs arranged like a narrative tapestry."),
     ("Minimalist ink wash", "Contemplative monochrome ink-wash painting with fluid tonal gradients, a few decisive brushstrokes, misty spatial depth, and radical, expressive emptiness."),
+    ("Scooby Doo", "Classic Scooby-Doo Saturday-morning animation style: hand-drawn 2D animation cels, bold clean outlines, flat cel shading, expressive faces and poses, elongated cartoon proportions, and richly painted backgrounds in eerie teal, violet, and warm orange. Playful spooky mystery atmosphere with theatrical shadows. Depict the specified literary characters in their own period clothing and setting using this cartoon treatment."),
+    ('Ansel Adams', 'Black-and-white fine-art photograph in the style of Ansel Adams, with large-format clarity, deep blacks, luminous whites, finely separated gray tones, crisp textures, dramatic skies, and monumental spatial depth. Use sharp focus across the scene and sculptural natural light. Preserve the specified people, action, and setting.'),
+    ('Raphael', 'High Renaissance painting in the style of Raphael, with balanced pyramidal groupings, graceful figures, serene expressive faces, harmonious architectural perspective, clear luminous color, and delicately modeled forms. Render the specified literary scene with classical composure and carefully related gestures.'),
+    ('Rembrandt', 'Oil painting in the style of Rembrandt, with warm amber light emerging from deep brown shadows, richly textured impasto highlights, softly dissolved edges, expressive hands, and psychologically attentive faces. Preserve the specified scene and give its figures intimate human presence.'),
+    ('Johannes Vermeer', 'Oil painting in the style of Johannes Vermeer, with cool daylight entering from one side, luminous ultramarine and ochre, pearly highlights, finely observed fabric, quiet geometric balance, and meticulous spatial depth. Apply this restrained light and material treatment to the specified scene.'),
+    ('Caravaggio', 'Baroque oil painting in the style of Caravaggio, with a single forceful beam of light, deep tenebrist shadows, grounded naturalistic figures, sharply modeled hands and faces, rich dark colors, and dramatic diagonal staging. Keep the specified literary action and relationships clear.'),
+    ('Claude Monet', 'Impressionist oil painting in the style of Claude Monet, with broken strokes of luminous color, colored shadows, shimmering atmospheric light, soft contours, and reflections or environmental color appropriate to the setting. Preserve the specified figures and action within the light-filled scene.'),
+    ('Vincent van Gogh', 'Post-Impressionist oil painting in the style of Vincent van Gogh, with thick directional impasto, rhythmic curling brushstrokes, vivid complementary colors, emphatic contours, and an emotionally charged surface. Preserve the specified people, actions, and setting while carrying their emotion through color and brushwork.'),
+    ('J. M. W. Turner', 'Romantic painting in the style of J. M. W. Turner, with glowing veils of gold and cool blue, sweeping atmospheric motion, dissolving edges, radiant backlight, and dramatic contrasts of scale. Keep the specified figures and narrative action legible within the luminous atmosphere.'),
+    ('Katsushika Hokusai', 'Edo-period ukiyo-e woodblock print in the style of Katsushika Hokusai, with precise flowing outlines, flat indigo and mineral colors, bold cropping, rhythmic environmental shapes, and inventive spatial layering. Preserve the specified characters, period clothing, and setting in this printmaking treatment.'),
+    ('Alphonse Mucha', 'Art Nouveau illustration in the style of Alphonse Mucha, with elegant sinuous outlines, flattened pastel colors, ornamental botanical framing, intricate fabric patterns, graceful figures, and circular decorative motifs. Preserve the specified scene and arrange the ornament around its actual participants.'),
+    ('Gustav Klimt', 'Symbolist painting in the style of Gustav Klimt, with luminous gold-leaf surfaces, jewel-toned mosaic patterns, intricate geometric textiles, flattened ornamental space, and delicately modeled faces and hands. Preserve the specified literary action and relationships within the decorative composition.'),
+    ('Edward Hopper', 'Oil painting in the style of Edward Hopper, with strong architectural geometry, spare composition, raking sunlight or isolated practical light, crisp shadow shapes, restrained color, and quietly expressive figures. Preserve the specified era and setting while conveying emotional distance through spacing and light.'),
 ]
 
 DIRECTIONS = [
@@ -106,8 +119,9 @@ def make_prompt(scene: str, index: int) -> tuple[str, str]:
               "Any couple is one man and one woman. "
               f"{DIRECTIONS[index % len(DIRECTIONS)]} Emotionally intelligent and visually coherent. "
               "Sensuality is carried by gesture, gaze, longing, and atmosphere rather than by skin. "
-              "Purely pictorial: no lettering, captions, signatures, or "
-              f"written words anywhere. Render every part of it as {label}, not as a generic digital illustration or photograph.")
+              "Entirely pictorial composition with clean, unmarked corners and edges. Printed surfaces are blank or face away. "
+              "No text, letters, numbers, labels, captions, logos, signatures, watermarks, or interface overlays anywhere. "
+              f" Render every part of it as {label}, not as a generic digital illustration or photograph.")
     # The FLUX host writes prompt metadata through a legacy single-byte path.
     # Replace the few unsupported glyphs rather than losing an otherwise valid job.
     prompt = prompt.encode("cp1252", errors="replace").decode("cp1252")
@@ -121,7 +135,7 @@ def transient(error: Exception) -> bool:
 def submit(prompt: str) -> str:
     # negative_prompt is left to the proxy, which supplies the shared exclusions
     # when the image host runs SDXL and strips the field when it does not.
-    payload = request_json("/api/flux/generate", {"prompt": prompt, "negative_prompt": None, "orientation": "landscape", "size": "1mp", "steps": 25, "seed": None, "guidance": None, "batch": 1, "spectrum_grid": False, "spectrum_same_seed": True, "show_preview": False, "save_previews": False, "selected_cells": []})
+    payload = request_json("/api/flux/generate", {"prompt": prompt, "negative_prompt": None, "orientation": "landscape", "size": "0.5mp", "steps": 25, "seed": None, "guidance": None, "batch": 1, "spectrum_grid": False, "spectrum_same_seed": True, "show_preview": False, "save_previews": False, "selected_cells": []})
     if not payload.get("success") or not payload.get("job_id"):
         raise RuntimeError(payload.get("error") or "Image service returned no job ID")
     return payload["job_id"]
