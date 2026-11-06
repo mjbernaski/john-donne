@@ -544,6 +544,27 @@
         "CHORUS OF DISCIPLES": "bill",
         "CHORUS OF SPIRITS": "harry"
       }
+    },
+    {
+      "id": "jekyll-hyde",
+      "name": "Stevenson · Jekyll and Hyde",
+      "title": "The Strange Case of Dr. Jekyll and Mr. Hyde, with Other Fables",
+      "poet": "Robert Louis Stevenson",
+      "category": "Fiction",
+      "subtitle": "Longmans, Green, and Co., 1901 · 10 chapters and 20 fables",
+      "description": "Stevenson’s novella of divided identity and hidden violence, followed by twenty fables from the supplied 1901 edition.",
+      "poems": "poems-jekyll-hyde.json",
+      "chapterCollection": true,
+      "companionLabel": "Stevenson companion",
+      "chatContext": "Robert Louis Stevenson · Jekyll and Hyde and Fables · Longmans 1901",
+      "sourceUrl": "https://archive.org/details/strangecaseofdrj00steviala",
+      "sourceNote": "The Strange Case of Dr. Jekyll and Mr. Hyde, with Other Fables (London: Longmans, Green, and Co., 1901), University of California Libraries scan at Internet Archive.",
+      "stripEditorialApparatus": false,
+      "authorProfile": "Robert Louis Stevenson (1850–1894), Scottish novelist, essayist, and poet. Discuss the selected text, its narrative perspective, moral ambiguity, reputation, and divided identity. Avoid spoilers beyond the selected section unless requested.",
+      "sourceProfile": "Imported from the OCR of the reader-supplied 1901 Longmans edition, Internet Archive item strangecaseofdrj00steviala. Includes all ten novella chapters and twenty fables. Front matter, the editorial introduction to Fables, and publisher advertisements are omitted. Running heads and page numbers are removed and hard-wrapped prose is rejoined. OCR recognition errors remain; consult the linked scan for exact wording and typography.",
+      "readingNotes": "Read with clear British pronunciation, measured pacing, and restrained suspense. Distinguish dialogue subtly and let irony in the fables emerge without exaggeration.",
+      "readingScene": "A quiet Victorian study with intimate acoustics.",
+      "readerProfile": "An attentive reader of Scottish Victorian fiction and fables."
     }
   ],
   "externalBooks": [

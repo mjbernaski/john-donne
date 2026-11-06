@@ -781,3 +781,7 @@ Narrator. Cues come from the imported speaker labels in both parts. Cue numberin
 starts at 1 in each section. Importing again rebuilds the performance cues without
 generating audio. Verify cue ordering and text tracking with
 `node test_character_performance.cjs`.
+
+### Stevenson · Jekyll and Hyde, with Other Fables
+
+`jekyll-hyde` adds the supplied [1901 Longmans edition](https://archive.org/details/strangecaseofdrj00steviala) under Fiction, with all ten novella chapters and twenty fables for reading, discussion, images, and narration. The source OCR is retained in `source-texts/jekyll-hyde-archive.txt`; rebuild with `python3 parse_jekyll_hyde.py`. The importer checks section order and both endings, removes running heads and page numbers, and rejoins wrapped prose. Front matter, the editorial introduction to Fables, and publisher advertisements are excluded. OCR errors remain; use the source scan to verify exact wording.
